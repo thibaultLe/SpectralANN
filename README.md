@@ -1,4 +1,5 @@
 # SpectralANN
+Note: Update the "path" variable in most files to point to your current working directory
 
 # Workflow:
 
