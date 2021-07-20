@@ -11,10 +11,16 @@ from torch.utils.data import DataLoader
 import inputParameters as config
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import interpolate
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+import os
+import pandas as pd
 
 #Load input parameters from inputParameters.py
+maxDegreeOfLegFit = config.maxDegreeOfLegFit
+nbrOfPCAcomponents = config.nbrOfPCAcomponents
 sizeOfTraining = config.trainingPoints 
+sizeOfValidation = config.validationPoints
 pstart = config.pstart
 pend = config.pend
 nbrPoints = config.nbrPoints
@@ -22,55 +28,114 @@ nbrPoints = config.nbrPoints
 path = "C:/Users/Thibault/Documents/Universiteit/\
 Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
 train_data = Database(csv_target= path + "rhoTraining.csv",\
-                      csv_input= path + "DTraining.csv",nb_data=sizeOfTraining).get_loader()
-
+                      csv_input= path + "DTrainingRaw.csv",nb_data=sizeOfTraining).get_loader()
 trainloader = DataLoader(train_data,batch_size=sizeOfTraining)
-print("Input data loaded")
+print("Training data loaded")
 
-#get propagators from DTraining.csv
+validation_data = Database(csv_target= path + "rhoValidation.csv",\
+    csv_input= path + "DValidationRaw.csv",nb_data=sizeOfValidation).get_loader()
+validationloader = DataLoader(validation_data,batch_size=sizeOfValidation)
+print("Validation data loaded")
+
+test_data = Database(csv_target= path + "rhoTest.csv",\
+    csv_input= path + "DTestRaw.csv",nb_data=sizeOfValidation).get_loader()
+testloader = DataLoader(test_data,batch_size=sizeOfValidation)
+print("Test data loaded")
+
+#get propagator data:
 alldatatensors = list(trainloader)
 alldata = alldatatensors[0][0].to("cpu").numpy()
 
+alldatatensorsValid = list(validationloader)
+alldataValid = alldatatensorsValid[0][0].to("cpu").numpy()
+
+alldatatensorsTest = list(testloader)
+alldataTest = alldatatensorsTest[0][0].to("cpu").numpy()
+
 
 print(len(alldata),"training points")
-# print(alldata[i])
 
-#Fit with legendre, build dataset of coefficients
-#Run PCA
-#Get Principal Components
 
-# ps = np.geomspace(pstart,pend,nbrPoints)
+# ps = np.geomspace(pstart,1,nbrPoints)
 #When using logspace, the fit is atrocious -> use linspace
-ps = np.linspace(pstart,pend,nbrPoints)
+ps = np.linspace(-1,1,nbrPoints)
 
-# i = 23
 
-# plt.figure()
-# plt.title("Fitting of propagator data")
-# # plt.xscale("log")
-# plt.plot(ps,alldata[i],"o",label="Original")
+#Calculates the MAE for combinations of maxdegrees and nbr of PCA components
+#Index is the index of the propagator we calculate the MAE for
+def MAE(ps,index):
+    
+    maxdegrees = [15,20,25,30,35]
+    # maxdegrees = [30]
+    nbrPCAcomps = [10,15]
+    # nbrPCAcomps = [5]
+    
+    MAEs = []
+    for maxdegree in maxdegrees:
+        coefficientsList = []
+        for i in range(len(alldata)):
+            coefficientsList.append(np.polynomial.legendre.legfit(ps,alldata[i],maxdegree))
+        
+        scaler=StandardScaler()#instantiate
+        scaler.fit(coefficientsList) # compute the mean and standard which will be used in the next command
+        X_scaled=scaler.transform(coefficientsList)
+        
+        for nbrComps in nbrPCAcomps:
+            if nbrComps <= maxdegree:
+                pca=PCA(n_components=nbrComps) 
+                pca.fit(X_scaled) 
+                
+                np.random.seed(2)
+                noise = np.random.normal(1,0.1,len(ps))
+                #Possible alternative: adding instead of multiplying
+                propWithNoise = alldata[index] * noise
+                
+                # plt.plot(ps,propWithNoise,"o",label="Noisy propagator")
+                pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
+                # plt.plot(ps,np.polynomial.legendre.legval(ps,pWNlegfit),label="Legendre fit to noisy propagator")
+                
+                pWNlegfitreshaped = pWNlegfit.reshape(1,-1)
+                noisePCAd = pca.transform(scaler.transform(pWNlegfitreshaped))
+                noisePCAreconstructed = scaler.inverse_transform(pca.inverse_transform(noisePCAd))
+                # plt.plot(ps,np.polynomial.legendre.legval(ps,noisePCAreconstructed[0])
+                
+                actualYs = alldata[index]
+                pcaReconstructedYs = np.polynomial.legendre.legval(ps,noisePCAreconstructed[0])
+                
+                MAE = 0
+                for i in range(len(actualYs)):
+                    MAE += abs(actualYs[i] - pcaReconstructedYs[i])
+                MAEs.append([maxdegree,nbrComps,MAE])
+    return MAEs
 
-#maxdegree of 35 = 36 values
-maxdegree = 35
+def most_frequent(List):
+    return max(set(List), key = List.count)
 
-# #Legendre fit
-# # maxdegree of 35 has the smallest MAE of almost all propagators (see below)
-# coeffs = np.polynomial.legendre.legfit(ps,alldata[i],maxdegree)
-# plt.plot(ps,np.polynomial.legendre.legval(ps,coeffs),label="Legendre fitted")
-# print("Coefficients of legendre fit",coeffs)
+# MAEcounter = []
+# for i in range(0,len(alldata),10):
+#     MAEs = MAE(ps,i)
+#     minMAE = MAEs[0]
+#     for MAElist in MAEs:
+#         # print("MaxDeg {}, PCs {}, MAE {}".format(MAElist[0],MAElist[1],round(MAElist[2],4)))
+        
+#         if MAElist[2] < minMAE[2]:
+#             minMAE = MAElist
+#     MAEcounter.append((minMAE[0],minMAE[1]))
+#     print("Idx: {}, Minimal MAE: MaxDeg {}, PCs {}, MAE {}".format(i,minMAE[0],minMAE[1],round(minMAE[2],4)))
 
-# plt.legend()
+# print("Most frequent:",most_frequent(MAEcounter))
+
+
+#Fit with legendre, build dataset of coefficients & Run PCA
+
+#maxdegree of 30 = 31 values
+maxdegree = maxDegreeOfLegFit
 
 #Legendre fit to all propagators in training set, keeps coefficients
 coefficientsList = []
 for i in range(len(alldata)):
     coefficientsList.append(np.polynomial.legendre.legfit(ps,alldata[i],maxdegree))
 
-# print(coefficientsList)
-
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 
 x = coefficientsList
 
@@ -79,29 +144,70 @@ scaler=StandardScaler()#instantiate
 scaler.fit(x) # compute the mean and standard which will be used in the next command
 X_scaled=scaler.transform(x)
 # print("Means:")
-# compList = []
-# for axis in scaler.mean_:
-#     compList.append(axis)
-# print(compList)
 # print(scaler.mean_)
 # print("Variances:")
-# compList = []
-# for axis in scaler.var_:
-#     compList.append(axis)
-# print(compList)
 # print(scaler.var_)
 
-#8 components is not enough: e.g. i = 10 diverges with only 8 components
-pca=PCA(n_components=10) 
+pca=PCA(n_components=nbrOfPCAcomponents) 
 pca.fit(X_scaled) 
 X_pca=pca.transform(X_scaled) 
 
 
-#Restore after pca = inverse scaling after inverse PCA 
-x_restore = scaler.inverse_transform(pca.inverse_transform(X_pca))
+path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
+    
+#Write data to these files (first deletes old ones)
+propTrain_csv = path+'DTraining.csv'
+if os.path.exists(propTrain_csv):
+    os.remove(propTrain_csv)
+propValid_csv = path+'DValidation.csv'
+if os.path.exists(propValid_csv):
+    os.remove(propValid_csv)
+propTest_csv = path+'DTest.csv'
+if os.path.exists(propTest_csv):
+    os.remove(propTest_csv)
 
-i = 1
-#TODO: plot MAE vs nbr of PCA components over a bunch of propagators
+
+""" 
+Use same scaling and PCA coefficients as on the training set to scale
+the validation and test set. Then write these PCA'd coefficients to files.
+"""
+
+coefficientsListValid = []
+for i in range(len(alldataValid)):
+    coefficientsListValid.append(np.polynomial.legendre.legfit(ps,alldataValid[i],maxdegree))
+
+#Normalise the attributes
+X_scaled=scaler.transform(coefficientsListValid)
+X_pcaValid=pca.transform(X_scaled) 
+
+coefficientsListTest = []
+for i in range(len(alldataTest)):
+    coefficientsListTest.append(np.polynomial.legendre.legfit(ps,alldataTest[i],maxdegree))
+
+#Normalise the attributes
+X_scaled=scaler.transform(coefficientsListTest)
+X_pcaTest=pca.transform(X_scaled) 
+
+#Write data to files
+propTraindf = pd.DataFrame(X_pca)
+propTraindf.to_csv(propTrain_csv,index=False,header=False,mode='a')
+# print(X_pca[-1])
+
+propValiddf = pd.DataFrame(X_pcaValid)
+propValiddf.to_csv(propValid_csv,index=False,header=False,mode='a')
+# print(X_pcaValid[-1])
+
+propTestdf = pd.DataFrame(X_pcaTest)
+propTestdf.to_csv(propTest_csv,index=False,header=False,mode='a')
+# print(X_pcaTest[-1])
+
+print("Data conversion to PCA components succesfull.")
+
+
+
+#Restore after pca = inverse scaling after inverse PCA 
+# x_restore = scaler.inverse_transform(pca.inverse_transform(X_pca))
+
 
 # plt.figure()
 # plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Original Legendre fitted")
@@ -110,42 +216,111 @@ i = 1
 # plt.legend()
 
 
-#Noise removal test:
+"""
+Visual noise removal and PCA reconstruction test:
+"""
+visualPlot = False
+if visualPlot:
+    i = 0
     
-plt.figure()
-# plt.plot(ps,alldata[i],label="Original propagator")
-# plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Propagator Legendre fit")
-plt.xlim(ps[0]-0.5,ps[-1]+0.5)
-plt.ylim(min(alldata[i])-1,max(alldata[i])+10)
+    plt.figure()
+    # plt.plot(ps,alldata[i],label="Original propagator")
+    # plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Propagator Legendre fit")
+    # plt.xlim(ps[0]-0.5,ps[-1]+0.5)
+    # plt.ylim(min(alldata[i])-1,max(alldata[i])+10)
+    
+    np.random.seed(2)
+    noise = np.random.normal(1,0.001,len(alldata[0]))
+    #Possible alternative: adding instead of multiplying
+    propWithNoise = alldata[i] * noise
+    
+    plt.plot(ps,propWithNoise,"o",label="Noisy propagator")
+    pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
+    plt.plot(ps,np.polynomial.legendre.legval(ps,pWNlegfit),label="Legendre fit to noisy propagator")
+    
+    pWNlegfitreshaped = pWNlegfit.reshape(1,-1)
+    noisePCAd = pca.transform(scaler.transform(pWNlegfitreshaped))
+    # print("PCA cfts on original:", X_pca[i])
+    print("PCA cfts for noisy prop:",noisePCAd)
+    
+    psActual = np.linspace(0.01,10,nbrPoints)
+    PCAreconstructed = scaler.inverse_transform(pca.inverse_transform(X_pca[i]))
+    # print("PCA reconstructed:",PCAreconstructed)
+    plt.plot(psActual,np.polynomial.legendre.legval(ps,PCAreconstructed),label="PCA reconstruction of original")
+    
+    # noisePCAd = pca.transform(scaler.transform(pWNlegfit))
+    noisePCAreconstructed = scaler.inverse_transform(pca.inverse_transform(noisePCAd))
+    plt.plot(ps,np.polynomial.legendre.legval(ps,noisePCAreconstructed[0]),label="PCA reconstruction of noisy")
+    
+    print("Original Leg cfts:",pWNlegfit)
+    print("Reconstructed:",noisePCAreconstructed[0])
+    
+    #Adding noise to pWNlegfit coefficients:
+    # legnoise = np.random.normal(1,0.01,len(pWNlegfit))
+    # print(legnoise[:10])
+    # legnoiseCfts = pWNlegfit * legnoise
+    # plt.plot(ps,np.polynomial.legendre.legval(ps,legnoiseCfts),label="Noisy legendre fit")
+    # print("Noisy legendre:",legnoiseCfts)
+    plt.title("Denoising with PCA")
+    plt.legend()
 
-np.random.seed(2)
-noise = np.random.normal(1,0.01,len(alldata[0]))
-#Possible alternative: adding instead of multiplying
-propWithNoise = alldata[i] * noise
+#Problem: huge errors after p = 1
+#Try to scale input data to improve ill conditioning:
+    #Resolved: x interval needs to be between -1 and 1 for optimal conditioning
+    
+"""
+With scaled input data:
+"""
+# #Scale input data in attempt to improve conditioning of fitting
+# scalerD=StandardScaler()#instantiate
+# scalerD.fit(alldata) # compute the mean and standard which will be used in the next command
+# scaledRawData = scalerD.transform(alldata)
 
-pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
-plt.plot(ps,np.polynomial.legendre.legval(ps,pWNlegfit),label="Legendre fit to noise")
+# coefficientsList = []
+# for i in range(len(alldata)):
+#     coefficientsList.append(np.polynomial.legendre.legfit(ps,scaledRawData[i],maxdegree))
+# x = coefficientsList
 
-pWNlegfitreshaped = pWNlegfit.reshape(1,-1)
-noisePCAd = pca.transform(scaler.transform(pWNlegfitreshaped))
-# noisePCAd = pca.transform(scaler.transform(pWNlegfit))
-noisePCAreconstructed = scaler.inverse_transform(pca.inverse_transform(noisePCAd))
+# #Normalise the attributes
+# scaler=StandardScaler()#instantiate
+# scaler.fit(x) # compute the mean and standard which will be used in the next command
+# X_scaled=scaler.transform(x)
+
+# pca=PCA(n_components=10) 
+# pca.fit(X_scaled) 
+# X_pca=pca.transform(X_scaled) 
+
+# plt.figure()
+# # plt.plot(ps,alldata[i],label="Original propagator")
+# # plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Propagator Legendre fit")
+# plt.xlim(ps[0]-0.5,ps[-1]+0.5)
+# # plt.ylim(min(scaledRawData[i])-1,max(scaledRawData[i])+1)
+
+# np.random.seed(2)
+# noise = np.random.normal(1,0.01,len(ps))
+# #Possible alternative: adding instead of multiplying
+# propWithNoise = scaledRawData[i] * noise
+# pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
+# plt.plot(ps,np.polynomial.legendre.legval(ps,pWNlegfit),label="Legendre fit to propagator")
+
+# pWNlegfitreshaped = pWNlegfit.reshape(1,-1)
+# noisePCAd = pca.transform(scaler.transform(pWNlegfitreshaped))
+# # noisePCAd = pca.transform(scaler.transform(pWNlegfit))
+# noisePCAreconstructed = scaler.inverse_transform(pca.inverse_transform(noisePCAd))
 # plt.plot(ps,np.polynomial.legendre.legval(ps,noisePCAreconstructed[0]),label="PCA reconstruction")
+# print("Reconstructed PCA cfts:",noisePCAreconstructed[0])
 
-
-print("Original:     ",pWNlegfit)
-print("Reconstructed:",noisePCAreconstructed[0])
-
-#Adding noise to pWNlegfit coefficients:
-legnoise = np.random.normal(1,0.001,len(pWNlegfit))
-legnoiseCfts = pWNlegfit * legnoise
-plt.plot(ps,np.polynomial.legendre.legval(ps,legnoiseCfts),label="Noisy legendre fit")
-print("Noisy legendre:",legnoiseCfts)
-
-# plt.plot(ps,propWithNoise,label="Propagator with noise")
-plt.title("Denoising with PCA")
-plt.legend()
-
+# # print("Original:     ",pWNlegfit)
+# #Adding noise to pWNlegfit coefficients:
+# legnoise = np.random.normal(1,0.0001,len(pWNlegfit))
+# print(legnoise[:10])
+# legnoiseCfts = pWNlegfit * legnoise
+# plt.plot(ps,np.polynomial.legendre.legval(ps,legnoiseCfts),label="Noisy legendre coefficients")
+# print("Noisy legendre:",legnoiseCfts)
+# plt.plot(ps,scaledRawData[i],label="Original")
+# # plt.plot(ps,propWithNoise,label="Propagator with noise")
+# plt.title("Denoising with PCA on scaled data")
+# plt.legend()
 
 
 
@@ -159,9 +334,9 @@ plt.legend()
 # plt.ylabel("Second principal component")
 
 
-print("Explained variance of the principal components", \
-      str(format(sum(pca.explained_variance_ratio_),".5f")))
-print(pca.explained_variance_ratio_)
+# print("Explained variance of the principal components", \
+#       str(format(sum(pca.explained_variance_ratio_),".5f")))
+# print(pca.explained_variance_ratio_)
 # print(pca.singular_values_)
 # print("Coefficients of each principal component")
 # print(pca.components_)
@@ -215,6 +390,7 @@ if SHOW_CFTS:
 # plt.title("MAE vs maximum degree of Legendre fit")
 
 #Splines
+# from scipy import interpolate
 # f = interpolate.splrep(ps,alldata[2],k=3)
 # # print(f)
 # ys = interpolate.splev(ps,f)
@@ -237,14 +413,19 @@ if SHOW_CFTS:
 #     return rational(x, [p0, p1, p2], [q1, q2])
 
 # from scipy.optimize import curve_fit
-# y = rational(ps, [-0.2, 0.3, 0.5], [-1.0, 2.0])
-# ynoise = y * (1.0 + np.random.normal(scale=0.1, size=x.shape))
+# x = alldata[2]
+# # y = rational(ps, [-0.2, 0.3, 0.5], [-1.0, 2.0])
+# # y = rational(ps)
+# # ynoise = y * (1.0 + np.random.normal(scale=0.01, size=x.shape))
 # popt,pcov = curve_fit(rational3_3, ps,alldata[2])
 # print(popt)
 
-# plt.plot(x, y, label='original')
-# plt.plot(x, ynoise, '.', label='data')
+# plt.figure()
+# # plt.plot(x, y, label='original')
+# # plt.plot(x, ynoise, '.', label='data')
 # plt.plot(ps, rational3_3(ps, *popt), label='Rational 3/3 fit')
+# plt.plot(ps,alldata[2],label="Original")
+# plt.legend()
 
 #1) Polynomial fit (roughly same as legendre)
 # import numpy.polynomial.polynomial as poly
@@ -259,9 +440,16 @@ if SHOW_CFTS:
 #     plt.plot(point,p(point)/q(point),"o",label="pade",color="C4")
 
 #Chebyshev fit: same as legendre fit
+# plt.figure()
 # coefs = np.polynomial.chebyshev.chebfit(ps,alldata[2],30)
 # chebfit = np.polynomial.chebyshev.chebval(ps,coefs)
+# noise = np.random.normal(1,0.01,len(coefs))
+# noisecfts = coefs*noise
+# chebnoise = np.polynomial.chebyshev.chebval(ps,noisecfts)
+# plt.plot(ps,alldata[2],label="Original")
 # plt.plot(ps,chebfit,label="cheb fit")
+# plt.plot(ps,chebnoise,label="Noisy cfts")
+# plt.legend()
 
 #Hermite fit: also roughly same as legendre fit
 # coefs = np.polynomial.hermite.hermfit(ps,alldata[2],30)
