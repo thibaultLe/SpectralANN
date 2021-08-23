@@ -13,11 +13,9 @@ import matplotlib.pyplot as plt
 #Load input parameters from inputParameters.py
 inputSize = config.nbrOfPCAcomponents
 nbrWs = config.nbrWs
-nbrOfNormalDists = config.nbrOfNormalDists
 nbrOfPoles = config.nbrOfPoles
 sizeOfTraining = config.trainingPoints 
 sizeOfValidation = config.validationPoints
-# outputSize = (3 * nbrOfNormalDists) + (4 * nbrOfPoles)
 outputSize = nbrWs + (4 * nbrOfPoles)
 print("outputsize:",outputSize)
 print("Input parameters loaded")
@@ -25,7 +23,7 @@ print("Input parameters loaded")
 print("Starting ACANN")
 # Create the network
 # model = ACANN(inputSize,outputSize,[62,112,212],drop_p=0.09).double()
-model = ACANN(inputSize,outputSize,[100,200,300,200],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,[100,200,400,800],drop_p=0.05).double()
 
 print("Model created")
 # Import the data
@@ -34,18 +32,15 @@ train_data = Database(csv_target= path + "rhoTraining.csv",csv_input= path + "DT
 validation_data=Database(csv_target= path + "rhoValidation.csv",csv_input= path + "DValidation.csv",nb_data=sizeOfValidation).get_loader()
 
 trainloader = DataLoader(train_data,batch_size=100,shuffle=True)
-validationloader = DataLoader(validation_data,batch_size=50)
+validationloader = DataLoader(validation_data,batch_size=100)
 # print("Training:",list(trainloader))
 # print("Validation:",list(validationloader))
 print("Data Loaded")
 
-# _norm_pdf_C = np.sqrt(2*np.pi)
 torch.pi = torch.tensor(math.pi)
 normpdf = torch.sqrt(torch.pi * 2)
-# print(normpdf)
-
 zlim = 10
-ws = np.linspace(0.01,5,nbrWs)
+ws = np.linspace(0.01,10,nbrWs)
 
 #Calculates the pdf of a normal distribution
 def custompdf(w,mean,std):
@@ -59,6 +54,7 @@ def custompdf(w,mean,std):
         return 0
 
 def eval_output(predicData):
+    nbrOfNormalDists = 66
     #For each testing value in the batch:
     reconstructedList = []
     # print(predicData[0])
@@ -134,8 +130,6 @@ def validation_score(nn_model):
         #Prediction and A_val are tensors with lists of size batch_size
         #The lists contain (outputSize) data values
         
-        #TODO: Fix Input and Target size mismatch
-        
         # print("rho_val",A_val[0])
         # print("Len rho val:",len(A_val[0]))
         # print("prediction:",prediction[0])
@@ -151,13 +145,11 @@ def validation_score(nn_model):
 error = L1Loss()
 #Define the optimizer
 optimizer = Adam(model.parameters())
-#RMSPRO 10 - 2e-3
-#ADAM 10 - 1.2e-3
 
 # Training parameters
 epochs = 100
 step=-1
-print_every = 240
+print_every = 100
 print("##############################")
 print("##############################")
 print("Starting the training")

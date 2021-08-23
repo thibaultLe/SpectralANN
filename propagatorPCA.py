@@ -27,6 +27,7 @@ nbrPoints = config.nbrPoints
 
 path = "C:/Users/Thibault/Documents/Universiteit/\
 Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
+
 train_data = Database(csv_target= path + "rhoTraining.csv",\
                       csv_input= path + "DTrainingRaw.csv",nb_data=sizeOfTraining).get_loader()
 trainloader = DataLoader(train_data,batch_size=sizeOfTraining)
@@ -41,6 +42,12 @@ test_data = Database(csv_target= path + "rhoTest.csv",\
     csv_input= path + "DTestRaw.csv",nb_data=sizeOfValidation).get_loader()
 testloader = DataLoader(test_data,batch_size=sizeOfValidation)
 print("Test data loaded")
+
+# params_data = pd.read_csv(path+'params.csv',header=None,nrows=sizeOfTraining+2*sizeOfValidation)
+# print(params_data)
+# print("Parameters data loaded")
+# firstTest = params_data.iloc[4]
+# print(firstTest)
 
 #get propagator data:
 alldatatensors = list(trainloader)
@@ -191,23 +198,88 @@ X_pcaTest=pca.transform(X_scaled)
 #Write data to files
 propTraindf = pd.DataFrame(X_pca)
 propTraindf.to_csv(propTrain_csv,index=False,header=False,mode='a')
-# print(X_pca[-1])
 
 propValiddf = pd.DataFrame(X_pcaValid)
 propValiddf.to_csv(propValid_csv,index=False,header=False,mode='a')
-# print(X_pcaValid[-1])
+
+
+print("Data conversion to PCA components succesfull.")
+
+
+"""
+Test of actual propagator:
+"""
+TEST_ACTUAL = False
+if TEST_ACTUAL:
+    #Read test data and convert to proper list
+    file = open("testPropData.txt","r")
+    basestring = file.read().split("\n")
+    
+    newlist = []
+    for elem in basestring:
+        newelem = elem.translate(str.maketrans("","","`} ")).split("{")[1:]
+        newlist.append(newelem)
+    
+    floatlist = []
+    for elem in newlist:
+        floatlist.append(elem[0].split(","))
+    
+    newlist = []
+    for elem in floatlist:
+        partlist = []
+        for nbr in elem:
+            if nbr != "":
+                partlist.append(float(nbr))
+        newlist.append(partlist)
+        
+    
+    psT = [item[0] for item in newlist]
+    dp2s = [item[1] for item in newlist]
+    errors = [item[2] for item in newlist]
+    
+    #Sort the arrays as some p's are out of order:
+    from more_itertools import sort_together
+    lists = sort_together([psT,dp2s,errors])
+    psT = list(lists[0])
+    dp2s = list(lists[1])
+    errors = list(lists[2])
+    
+    psT.append(10)
+    dp2s.append(0)
+    errors.append(errors[-1])
+    
+    
+    # plt.figure()
+    # plt.plot(psT,dp2s,"o")
+    # plt.figure()
+    # plt.plot(ps,dp2s)
+    
+    # psScaled = np.linspace(-1,1,len(psT))
+    from scipy.interpolate import interp1d
+    
+    psNew = np.linspace(pstart,pend,nbrPoints)
+    dp2sFunc = interp1d(psT,dp2s)
+    dp2sInter = dp2sFunc(psNew)
+    
+    coefficients = np.polynomial.legendre.legfit(ps,dp2sInter,maxdegree).reshape(1,-1)
+    
+    X_scaled=scaler.transform(coefficients)
+    X_pcaTestActual=pca.transform(X_scaled) 
+    
+    print(X_pcaTestActual)
+    # print(X_pcaTest)
+    # print(len(X_pcaTest))
+    X_pcaTest[-1] = X_pcaTestActual
 
 propTestdf = pd.DataFrame(X_pcaTest)
 propTestdf.to_csv(propTest_csv,index=False,header=False,mode='a')
 # print(X_pcaTest[-1])
 
-print("Data conversion to PCA components succesfull.")
 
 
 
 #Restore after pca = inverse scaling after inverse PCA 
 # x_restore = scaler.inverse_transform(pca.inverse_transform(X_pca))
-
 
 # plt.figure()
 # plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Original Legendre fitted")
@@ -219,23 +291,25 @@ print("Data conversion to PCA components succesfull.")
 """
 Visual noise removal and PCA reconstruction test:
 """
-visualPlot = False
+visualPlot = True
 if visualPlot:
     i = 0
     
     plt.figure()
-    # plt.plot(ps,alldata[i],label="Original propagator")
+    plt.plot(ps,alldataTest[i],label="Original propagator")
     # plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Propagator Legendre fit")
     # plt.xlim(ps[0]-0.5,ps[-1]+0.5)
     # plt.ylim(min(alldata[i])-1,max(alldata[i])+10)
     
     np.random.seed(2)
-    noise = np.random.normal(1,0.001,len(alldata[0]))
+    noise = np.random.normal(1,0.001,len(alldataTest[0]))
     #Possible alternative: adding instead of multiplying
-    propWithNoise = alldata[i] * noise
+    propWithNoise = alldataTest[i] * noise
     
     plt.plot(ps,propWithNoise,"o",label="Noisy propagator")
     pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
+    
+    ps = np.linspace(-1,1,500)
     plt.plot(ps,np.polynomial.legendre.legval(ps,pWNlegfit),label="Legendre fit to noisy propagator")
     
     pWNlegfitreshaped = pWNlegfit.reshape(1,-1)
@@ -244,9 +318,9 @@ if visualPlot:
     print("PCA cfts for noisy prop:",noisePCAd)
     
     psActual = np.linspace(0.01,10,nbrPoints)
-    PCAreconstructed = scaler.inverse_transform(pca.inverse_transform(X_pca[i]))
-    # print("PCA reconstructed:",PCAreconstructed)
-    plt.plot(psActual,np.polynomial.legendre.legval(ps,PCAreconstructed),label="PCA reconstruction of original")
+    # PCAreconstructed = scaler.inverse_transform(pca.inverse_transform(X_pca[i]))
+    # # print("PCA reconstructed:",PCAreconstructed)
+    # plt.plot(psActual,np.polynomial.legendre.legval(ps,PCAreconstructed),label="PCA reconstruction of original")
     
     # noisePCAd = pca.transform(scaler.transform(pWNlegfit))
     noisePCAreconstructed = scaler.inverse_transform(pca.inverse_transform(noisePCAd))
@@ -266,7 +340,7 @@ if visualPlot:
 
 #Problem: huge errors after p = 1
 #Try to scale input data to improve ill conditioning:
-    #Resolved: x interval needs to be between -1 and 1 for optimal conditioning
+#Resolved: x interval needs to be between -1 and 1 for optimal conditioning
     
 """
 With scaled input data:

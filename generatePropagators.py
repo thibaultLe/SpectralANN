@@ -15,8 +15,6 @@ import time
 import random
 import matplotlib.pyplot as plt
 
-#Debug:
-
 np.seterr('raise')
 cacheSize = 2048
 
@@ -24,9 +22,9 @@ cacheSize = 2048
 #N1 = int
 #ABCs = [[A1,B1,C1],[A2,B2,C2]...[AN1,BN1,CN1]] list of list of floats
 @lru_cache(maxsize=cacheSize)
-def rho1(w,Z,m2,lam2,N1,ABCs):
+def rho1(w2,Z,m2,lam2,N1,ABCs):
     gamma = 13/22
-    w2 = w ** 2
+    # w2 = w ** 2
     #Calculate the ksum
     ksum = 0
     for k in range(N1):
@@ -52,13 +50,12 @@ def custompdf(w,mean,std):
 #N2,N3 = ints
 #gabl = [[gam1,alfa1,beta1],[gam2,alfa2,beta2]...[gamN2,alfaN2,betaN2]] list of list of floats
 @lru_cache(maxsize=cacheSize)
-def rho2(w,N2,gabl,N3,gabi):
-    w2 = w ** 2
+def rho2(w2,N2,gabl,N3,gabi):
+    # w2 = w ** 2
     lsum = 0
     #Sum of normal distributions
     #If w2 > ~5.2: underflow in exp
     for l in range(N2):
-        #Still needs a sqrt in the stddev
         # lsum += np.sqrt(2*np.pi) * gabl[l][0] * norm.pdf(w2,loc=gabl[l][1],scale=gabl[l][2]/2)
         # lsum += gabl[l][0] * (np.exp(-((w2 - gabl[l][1])**2)/gabl[l][2]))        
         lsum += gabl[l][0] * custompdf(w2,gabl[l][1],gabl[l][2])
@@ -80,7 +77,8 @@ def rho(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi):
 
 #Correct form under the integral
 def rhoint(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2):
-    return rho(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi)/(w**2 + p2)
+    # return rho(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi)/(w**2 + p2)
+    return rho(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi)/(w + p2)
 
     
 @lru_cache(maxsize=cacheSize)
@@ -94,19 +92,16 @@ def poles(p2,N,abcds):
         #     + (djs[j] ** 2) +      (p2 ** 2)
         denom = (abcds[j][2] ** 2) + (2 * abcds[j][2] * p2) + \
                 (abcds[j][3] ** 2) + (p2 ** 2)
-        #Extra constraint: not (d == 0 and p2 == -c)
         jsum += nom/denom
     return jsum
 
 #Calculates the propagator out of the given parameters for the spectral
 # density function and complex conjugate poles
-def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,p2):
-    
-    # import warnings
-    # warnings.filterwarnings('error')
+def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p2):
     try:
-        res = integrate.quad(rhoint,0.01,5,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
-        + poles(p2,N,abcds)
+        #Integrate over w^2
+        res = integrate.quad(rhoint,0.01+sigma,5,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
+              + poles(p2,N,abcds)
     except:
         print(Z,m2,lam2,ABCs,gabl,gabi,p2)
         raise RuntimeError("Error when calculating integral for propagator")
@@ -114,33 +109,38 @@ def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,p2):
     return res
         
 """
-TODO: implement sigma (cutoff for integral)
 TODO: Check correctness of spectral densities (some -> inf at zero)
 """
         
 
 if __name__ == "__main__":
     
-    pstart = 0.1
+    pstart = 0.01
     pend = 10
     nbrPoints = 100
     # ps = np.geomspace(pstart,pend,nbrPoints)
     ps = np.linspace(pstart,pend,nbrPoints)
     #Lin space for density function
     nbrWs = 200
-    ws = np.linspace(0.01,5,nbrWs)
+    ws = np.linspace(0.01,10,nbrWs)
     
     
-    #Parameters:
-    #Z in [0,10]
+    """
+    #######################################
+    Input Parameters:
+    #######################################
+    """
+    #Sigma in [0,1]
+    sigmas = np.linspace(0,1,2)
+    #Z in [1,10]
     # Z = 1
-    Zs = np.linspace(0,10,4)
+    Zs = np.linspace(1,10,2)
     #m2 in [0,5]
     # m2 = 3
-    m2s = np.linspace(1,5,2)
+    m2s = np.linspace(2,5,2)
     #lam2 in ]0,5] 
     # lam2 = 2
-    lam2s = np.linspace(0.5,4.5,2)
+    lam2s = np.linspace(1,4,2)
     #Extra constraint: w^2 + m^2 / lam2 > 1
     #Extra constraint: lam2 > 0
     #Extra constraint: Beta L/i > 0
@@ -164,7 +164,8 @@ if __name__ == "__main__":
     # 5.0 1.0 0.5 ((-5, 5, 2, -2),) ((-3, 0, 3),) ((-5, 5, 1),) ((-2, 3, 5),)
     # C = 0 caused large propagator in: 
     # 5.0 5.0 4.5 ((-5, 5, 2, -2),) ((-3, 1, 0),) ((-2, 5, 5),) ((-2, 3, 5),)
-    T = list(itertools.product(*[[-3,0,3],[-4,1,4],[-3,1,3]]))
+    # T = list(itertools.product(*[[-3,0,3],[-3,1,3],[-3,1,3]]))
+    T = list(itertools.product(*[[-3,3],[-3,3],[-3,3]]))
     noSingularitiesT = []
     for ABC in T:
         singularityFound = False
@@ -190,7 +191,9 @@ if __name__ == "__main__":
     # gaml = N2 * [1]
     # alfal = N2 * [1]
     # betal = N2 * [1]
-    T = list(itertools.product(*[[-5,-2,2,5],[1,3,5],[1,3,5]]))
+    # T = list(itertools.product(*[[-5,-2,2,5],[1,3,5],[1,3,5]]))
+    # T = list(itertools.product(*[[-5,1,5],[1,3,5],[1,3,5]]))
+    T = list(itertools.product(*[[-3,3],[1,5],[1,5]]))
     
     gablNs = []
     for N2 in N2s:
@@ -207,46 +210,31 @@ if __name__ == "__main__":
     # #N in [0,3] (int)
     # N = 1
     
+    #Complex poles:
     # #a,b,c,d in [-5,5] 
-    T = list(itertools.product([-5,-2,2,5],repeat=4))
+    # T = list(itertools.product([-3,3],repeat=4))
+    T = list(itertools.product(*[[-3,3],[1,5],[-3,3],[1,5]]))
     abcdNs = []
     for N in Ns:
         abcds = list(itertools.product(T,repeat=N))
-        # print(abcds)
         # print("poles:",N,"len:",len(abcds))
         abcdNs.append(abcds)
-    # ajs = N * [1]
-    # bjs = N * [1]
-    # cjs = N * [1]
-    # djs = N * [1]
+        
+        
     
-    # for i in range(len(Ns)):
-    #     for j in range(len(N1s)):
-    #         for k in range(len(N2s)):
-    #             for l in range(len(N3s)):
-    #                 sub = [Z,m2,lam2,abcdNs[i],ABCNs[j],gablNs[k],gabiNs[l]]
-    #                 listOfAllParams.append(list(itertools.product(*sub)))
-                    
-    # print(len(Zs)*len(m2s)*len(lam2s)*len(abcdNs[1])*len(ABCNs[1]*len(gablNs[1])*len(gabiNs[0])))
     #Cartesian products become very large, very quickly...
-    #CSV :                 2400 points -> 9MB
+    #50 per second, 200000 total = 1 hour data generation
     
-    #30 per second, 100000 total = 1 hour data generation
-    
-    #0,0,0,0 -> len =         65536 
-    #1,0,0,0 -> len =      16777216 
-    #1,1,0,0 -> len =    1073741824
-    #1,1,1,0 -> len =   68719476736
-    #1,1,1,1 -> len = 4398046511104
     
     #Iterator over all possible combinations of parameters
     #Currently only 1 pole,ABC,gami and gaml
     """
     TODO: more poles, ABCs in data generation 
+    TODO: Check physicality of spectral density function/propagator
     """
     
-    names = ["Z","m2","lam2","abcd","ABC","gabl","gabi"]
-    sub = [Zs,m2s,lam2s,abcdNs[0],ABCNs[0],gablNs[0],gabiNs[0]]
+    names = ["sig","Z","m2","lam2","abcd","ABC","gabl","gabi"]
+    sub = [sigmas,Zs,m2s,lam2s,abcdNs[0],ABCNs[0],gablNs[0],gabiNs[0]]
     
     totalSize = 1
     print("Parameters:")
@@ -279,6 +267,9 @@ if __name__ == "__main__":
     rhoTest_csv = path+'rhoTest.csv'
     if os.path.exists(rhoTest_csv):
         os.remove(rhoTest_csv)
+    params_csv = path+'params.csv'
+    if os.path.exists(params_csv):
+        os.remove(params_csv)
         
         
     
@@ -289,47 +280,105 @@ if __name__ == "__main__":
     random.seed(64)
     
     counter = 0
+    counterPos = 0
+    counterNeg = 0
+    counterAccepted = 0
     propTempList = []
     rhoTempList = []
+    paramTempList = []
     
     desiredDataSize = 10000
-    print("Prob of picking:",2*desiredDataSize/totalSize)
+    print("Desired training data size:",desiredDataSize)
+    print("Percentage of training set selected:",round(100*desiredDataSize/totalSize,2),"%")
     
-    #Iterate over parameters (too large to fit entirely in memory)
+    # Print iterations progress
+    def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+        """
+        Call in a loop to create terminal progress bar
+        @params:
+            iteration   - Required  : current iteration (Int)
+            total       - Required  : total iterations (Int)
+            prefix      - Optional  : prefix string (Str)
+            suffix      - Optional  : suffix string (Str)
+            decimals    - Optional  : positive number of decimals in percent complete (Int)
+            length      - Optional  : character length of bar (Int)
+            fill        - Optional  : bar fill character (Str)
+            printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+        """
+        percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+        filledLength = int(length * iteration // total)
+        bar = fill * filledLength + '-' * (length - filledLength)
+        print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+        # Print New Line on Complete
+        if iteration == total: 
+            print()
+    
+    #Iterate over parameters (too large to fit entirely in memory)  
+    printProgressBar(0, desiredDataSize, prefix = 'Progress:', suffix = 'Complete', length = 50)
     for item in iterator:
         #Random sampling over the resulting parameter combinations
-        if random.random() <= 2*desiredDataSize/totalSize:
+        if random.random() <= 4.5*1.5*3*2*desiredDataSize/totalSize:
             # print(item)
             
-            
-            Z = item[0]
-            m2 = item[1]
-            lam2 = item[2]
+            sigma = item[0]
+            Z = item[1]
+            m2 = item[2]
+            lam2 = item[3]
             #Possible singularity if m2<lam2 -> skip this iteration
             if m2 < lam2:
                 continue
-            abcds = item[3]
+            abcds = item[4]
             N = len(abcds)
-            ABCs = item[4]
+            ABCs = item[5]
             N1 = len(ABCs)
-            gabls = item[5]
+            gabls = item[6]
             N2 = len(gabls)
-            gabis = item[6]
+            gabis = item[7]
             N3 = len(gabis)
             
-            #Calculate propagator
+            #Calculate propagator (non negative)
+            
+            #Add normal noise to the values:
+            noiseLevel = 1e-5
+            
             dps = []
+            negativeProp = False
             for p in ps:
-                dps.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,p))
+                prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,p)
+                if prop < 0:
+                    negativeProp = True
+                    break
+                dps.append(prop + np.random.normal(scale=noiseLevel))
+                # dps.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,p))
+            #Propagators are >= 0, skip if it is negative anywhere
+            if negativeProp: 
+                counterNeg += 1
+                continue
+            else:
+                counterPos += 1
             
             if dps[0] > 1000:
                 print(Z,m2,lam2,ABCs,gabls,gabis,abcds)
                 raise RuntimeError("Propagator -> inf at 0, check parameters ^")
+            
                 
             #Calculate density function (already in cache so should be fast)
             rhos = []
             for w in ws:
                 rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis))
+            
+            
+            #Check derivative equation
+            dp0 = dps[0] - poles(ps[0],N,abcds)
+            dp1 = dps[1] - poles(ps[1],N,abcds)
+            derivativeProp = (dp1 - dp0)/(ps[1]-ps[0])
+            derivativeRho = (rhos[1] - rhos[0])/(ws[1]-ws[0])
+            idealDerivative = -derivativeRho/2
+            if derivativeProp < idealDerivative - 0.5 or \
+               derivativeProp > idealDerivative + 0.5:
+                continue
+            
+            # print(derivativeProp,idealDerivative)
             
             #Add poles to the list: (1 value at a time, add zeroes if not enough poles)
             for polecouple in abcds:
@@ -343,13 +392,17 @@ if __name__ == "__main__":
             
             propTempList.append(dps)
             rhoTempList.append(rhos)
+            paramTempList.append([Z,m2,lam2,abcds,ABCs,gabls,gabis])
                 
             counter += 1
             
             
             #Write to csv in batches
-            batchSize = 200
+            batchSize = 400
             if counter % batchSize == 0:
+                # print("Positive prop:", counterPos)
+                # print("Negative prop:", counterNeg)
+                
                 # print(rho1.cache_info())
                 # plt.figure()
                 # plt.plot(ps,dps)
@@ -362,12 +415,12 @@ if __name__ == "__main__":
                 #1 out of every 4 points alternatively to validation and testing
                 #75% train, 12.5% validation, 12.5% testing
                 propTraining   = np.array(propTempList)[np.mod(np.arange(batchSize),4) != 0]
-                propValidation = propTempList[4::8]
-                propTest       = propTempList[::8]
+                propValidation = propTempList[::8]
+                propTest       = propTempList[4::8]
                 
                 rhoTraining = np.array(rhoTempList)[np.mod(np.arange(batchSize),4) != 0]
-                rhoValidation = rhoTempList[4::8]
-                rhoTest       = rhoTempList[::8]
+                rhoValidation = rhoTempList[::8]
+                rhoTest       = rhoTempList[4::8]
                 
                 propTraindf = pd.DataFrame(propTraining)
                 propTraindf.to_csv(propTrain_csv,index=False,header=False,mode='a')
@@ -387,16 +440,31 @@ if __name__ == "__main__":
                 rhoTestdf = pd.DataFrame(rhoTest)
                 rhoTestdf.to_csv(rhoTest_csv,index=False,header=False,mode='a')
                 
+                paramsdf = pd.DataFrame(paramTempList)
+                paramsdf.to_csv(params_csv,index=False,header=False,mode='a')
                 
                 
-                #Reset templist
+                
+                #Reset templists
                 propTempList = []
                 rhoTempList = []
+                paramTempList = []
                 
-                print("\nWrote to file")
-                print("{} points per second".format(round(batchSize/(time.time()-start),2)))
-                print("{} points done".format(counter))
+                pointsPerSecond = round(batchSize/(time.time()-start),2)
+                minsRemaining = round((desiredDataSize - counter*4/3) / (pointsPerSecond*60),2)
+                # print("\nWrote to file")
+                # print("{} points done".format(counterPos))
+                # print("{} points per second".format(round(batchSize/(time.time()-start),2)))
+                # print("{}% finished\n".format(round(100*counter/(desiredDataSize*1.5),2)))
+                printProgressBar(counter*4/3, desiredDataSize, prefix = 'Progress:', \
+                                 suffix = 'Complete,{} mins remaining, {} per sec'.format(minsRemaining,pointsPerSecond), length = 30)
+                            
+                #Stop when desired data size is reached
+                if counter*4/3 >= desiredDataSize:
+                    break
                 start = time.time()
+                
+
             
             #Calculate density function
             #Tradeoff: calculate and store it (more storage usage), faster eval in NN
@@ -408,11 +476,12 @@ if __name__ == "__main__":
             
         
     
+    nbrOfTrainingPoints = round(counter*3/4 if counter % 400 == 0 else (counter - counter % 400)*3/4)
+    nbrOfValidationPoints = round(counter/8 if counter % 400 == 0 else (counter - counter % 400)/8)
     print("\nData generation succesfull")
-    nbrOfTrainingPoints = round(counter*3/4 if counter % 200 == 0 else (counter - counter % 200)*3/4)
     print("{} training points".format(nbrOfTrainingPoints))
-    nbrOfValidationPoints = round(counter/8 if counter % 200 == 0 else (counter - counter % 200)/8)
-    print("{} validation/testing points".format(nbrOfValidationPoints))
+    print("{} validation points".format(nbrOfValidationPoints))
+    print("{} testing points".format(nbrOfValidationPoints))
         
     nbrOfNormalDists = 66
     nbrOfPoles = 3

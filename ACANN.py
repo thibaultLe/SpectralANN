@@ -35,7 +35,6 @@ class ACANN(nn.Module):
             x=F.relu(layer(x))
             x=self.dropout(x)
         x=self.output(x)
-        # print("output:",x)
         return x
     
     

@@ -13,11 +13,17 @@ from scipy import integrate
 
 #Parameters:
 #Z in [0,10]
+#Impact: Large
 Z = 1
+Z = 0
 #m2 in [0,5]
+#Small-medium
 m2 = 2
+m2 = 1
 #lam2 in [0,5]
+#Large
 lam2 = 1
+lam2 = 0.5
 #Extra constraint: w^2 + m^2 / lam2 > 1
 
 #fixed gamma
@@ -29,28 +35,40 @@ N2 = 1
 N3 = 1
 
 #A,B,Cks in [-5,5] 
-Aks = N1 * [1]
-Bks = N1 * [1]
+#Large
+Aks = N1 * [0]
+#Small
+Bks = N1 * [4]
+#Small
 Cks = N1 * [1]
 
 #alfa,beta in [0,5]
 #gamma in [-5,5]
-gaml = N2 *  [1]
-alfal = N2 * [2]
+#Small
+gaml = N2 *  [5]
+#Small-Medium dependent on other params
+alfal = N2 * [3]
+#Small
 betal = N2 * [1]
 
-gami = N3 *  [1]
+#Small
+gami = N3 *  [2]
+#Small
 alfai = N3 * [3]
-betai = N3 * [1]
+#Small
+betai = N3 * [3]
 
 #N in [0,3] (int)
 N = 1
 
 #a,b,c,d in [-5,5] 
-ajs = N * [1]
-bjs = N * [1]
-cjs = N * [1]
-djs = N * [1]
+#Large impact (poles + residues)
+ajs = N * [-3]
+bjs = N * [-3]
+cjs = N * [-3]
+djs = N * [-3]
+
+sigma = 0
 
 #Convert to different format
 abcds = []
@@ -127,8 +145,8 @@ def poles(p2,N,abcds):
 
 #Calculates the propagator out of the given parameters for the spectral
 # density function and complex conjugate poles
-def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,p2):
-    return integrate.quad(rhoint,0.01,5,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
+def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p2):
+    return integrate.quad(rhoint,0.01+sigma,5,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
         + poles(p2,N,abcds)
         
 
@@ -158,14 +176,19 @@ rhos = []
 for w in ws:
     rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi))
     
-plt.figure()
-plt.plot(ws,rhos)
-plt.xlabel("ω")
-plt.ylabel("ρ(ω)")
-plt.title("Spectral density function")
+# plt.figure()
+# plt.plot(ws,rhos)
+# plt.xlabel("ω")
+# plt.ylabel("ρ(ω)")
+# plt.title("Spectral density function")
 
 
-ps = np.geomspace(0.001,100,100)
+# ps = np.geomspace(0.001,100,100)
+pstart = 0.1
+pend = 10
+nbrPoints = 100
+# ps = np.geomspace(pstart,pend,nbrPoints)
+ps = np.linspace(pstart,pend,nbrPoints)
 # p = 0
 
 # print(integrate.quad(rho,0.01,4))
@@ -183,7 +206,7 @@ dpswithpoles = []
 for p in ps:
     #Assume p's are p^2's
     # dpswithpoles.append(integrate.quad(rhoint,0.01,5,p)[0] + poles(p))
-    dpswithpoles.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,p))
+    dpswithpoles.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p))
     
 # plt.figure()
 # plt.plot(ps,dps)
@@ -192,7 +215,7 @@ for p in ps:
 plt.figure()
 plt.plot(ps,dpswithpoles,"o")
 plt.title("Propagator with poles")
-plt.xscale("log")
+# plt.xscale("log")
 
 
 

@@ -1,7 +1,10 @@
-nbrOfNormalDists = 64
-nbrOfPoles = 2
-trainingPoints = 300
-validationPoints = 50
-pstart = 0.1
+nbrOfNormalDists = 66
+nbrOfPoles = 3
+maxDegreeOfLegFit = 30
+nbrOfPCAcomponents = 15
+trainingPoints = 2100
+validationPoints = 350
+pstart = 0.01
 pend = 10
 nbrPoints = 100
+nbrWs = 200
