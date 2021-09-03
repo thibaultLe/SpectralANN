@@ -13,22 +13,24 @@ import matplotlib.pyplot as plt
 import inputParameters as config
 import pandas as pd
 
+import robustnessCheck
+
 #Load input parameters from inputParameters.py
 inputSize = config.nbrOfPCAcomponents
 nbrWs = config.nbrWs
 nbrOfPoles = config.nbrOfPoles
 sizeOfTraining = config.trainingPoints 
 sizeOfValidation = config.validationPoints
-outputSize = nbrWs + (4 * nbrOfPoles)
+outputSize = nbrWs + (4 * nbrOfPoles) + 1
 pstart = config.pstart
 pend = config.pend
 nbrPoints = config.nbrPoints
-print("NN input size {}, output size {} plus {} poles".format(inputSize,outputSize-4*nbrOfPoles,nbrOfPoles))
+print("NN input size {}, output size {} plus {} poles and sigma".format(inputSize,outputSize-4*nbrOfPoles-1,nbrOfPoles))
 
 #Load the saved NN model (made in train_ACANN.py)
 saved = "savedNNmodel.pth"
 #Note: Make sure the dimensions are the same
-model = ACANN(inputSize,outputSize,[100,200,400,800],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
@@ -79,71 +81,8 @@ def custompdf(w,mean,std):
     else:
         return 0
 
-#For each test sample
-def eval_output(predicData):
-    nbrOfNormalDists=66
-    #For each testing value in the batch:
-    reconstructedList = []
-    # print(predicData[0])
-    # print(actual[0])
-    # print(len(actual[0]))
-    for i in range(len(predicData)):
-        rhoReconstructed = []
-        #Reconstruct the spectral density function
-        for distr in range(nbrOfNormalDists):
-            #Mean, standard deviation and weight of normal distribution
-            meani = predicData[i][3*distr]
-            #Stddev has to be positive
-            stdi = abs(predicData[i][3*distr + 1])
-            wi = predicData[i][3*distr + 2]
-            
-            # print("mean_{}:".format(distr),meani.round(5), \
-            #       "   std_{}:".format(distr),stdi.round(5),"   w_{}:".format(distr),wi.round(5))
-            
-            if (distr == 0):
-                for w in ws:
-                    rhoReconstructed.append(wi*custompdf(w,meani,stdi))
-                    
-            else:            
-                for j in range(len(ws)):
-                    rhoReconstructed[j] = rhoReconstructed[j] + wi*custompdf(ws[j],meani,stdi)
-        
-        polesReconstructed = []
-        #Reconstruct complex poles
-        skipNbr = 3 * nbrOfNormalDists
-        for pole in range(nbrOfPoles):
-            #Real and Imaginary part of poles and residues
-            qiRe = predicData[i][4*pole + skipNbr]
-            qiIm = predicData[i][4*pole + skipNbr + 1]
-            RiRe = predicData[i][4*pole + skipNbr + 2]
-            RiIm = predicData[i][4*pole + skipNbr + 3]
-            
-            # print("Re(q_{}):".format(pole),qiRe.round(5), \
-            #       "Im(q_{}):".format(pole),qiIm.round(5), \
-            #         "Re(R_{}):".format(pole),RiRe.round(5), \
-            #         "Im(R_{}):".format(pole),RiIm.round(5))
-            
-            recPole = [qiRe,qiIm,RiRe,RiIm]
-            #polesReconstructed is the list of poles of the current test sample
-            # polesReconstructed.append(recPole)
-            polesReconstructed = polesReconstructed + recPole
     
-    
-        reconstructedList.append(rhoReconstructed + polesReconstructed)
-        #Actual values (length 200 + 12 : ws + 3 poles):
-        #Calculate difference with actual values:
-        #Difference in spectral density function:
-        # for k in range(len(ws)):
-        #     MAE += abs(rhoReconstructed[k] - actual[i][k])
-        # #Difference in poles:
-        # actualPoles = actual[i][-4*nbrOfPoles:]
-        # for k in range(4*nbrOfPoles):
-        #     MAE += abs(polesReconstructed[k] - actualPoles[k])
-            
-    return reconstructedList
-    
-    
-plot = True
+plot = False
 if plot:
     #Plot the density function
     #currently only the last test sample
@@ -152,32 +91,7 @@ if plot:
         
         fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)
         fig.suptitle("Reconstructed spectral density functions")
-        # i = 0
         step = int(sizeOfValidation/sizeOfValidation)
-        
-        # ax1.plot(ws,rhovaluesList[i][:nbrWs],label="Original")
-        # ax1.plot(ws,predicData[i][:nbrWs],label="Reconstructed")
-        # ax1.legend()
-        # ax1.set_xlabel("ω")
-        # ax1.set_ylabel("ρ(ω)")
-        
-        # ax2.plot(ws,rhovaluesList[i+step][:nbrWs],label="Original")
-        # ax2.plot(ws,predicData[i+step][:nbrWs],label="Reconstructed")
-        # ax2.legend()
-        # ax2.set_xlabel("ω")
-        # ax2.set_ylabel("ρ(ω)")
-        
-        # ax3.plot(ws,rhovaluesList[i+2*step][:nbrWs],label="Original")
-        # ax3.plot(ws,predicData[i+2*step][:nbrWs],label="Reconstructed")
-        # ax3.legend()
-        # ax3.set_xlabel("ω")
-        # ax3.set_ylabel("ρ(ω)")
-        
-        # ax4.plot(ws,rhovaluesList[i+3*step][:nbrWs],label="Original")
-        # ax4.plot(ws,predicData[i+3*step][:nbrWs],label="Reconstructed")
-        # ax4.legend()
-        # ax4.set_xlabel("ω")
-        # ax4.set_ylabel("ρ(ω)")
         
         print("\ni =",i,"and",i+step,"out of",len(rhovaluesList))
         print("Params:",paramsList[4::8][i])
@@ -212,8 +126,9 @@ if plot:
     
     #Plot the poles
     #currently only the ith test sample
-    plotPoles = False
+    plotPoles = True
     if plotPoles:
+        polemarkers = ["^","o","*"]
         for i in range(0,round(len(rhovaluesList)),round(len(rhovaluesList)/amountOfTests)):
             plt.figure()
             for j in range(nbrOfPoles):
@@ -227,23 +142,19 @@ if plot:
                 cjOrig = rhovaluesList[i][nbrWs + 4*j + 2]
                 djOrig = rhovaluesList[i][nbrWs + 4*j + 3]
                 
-                plt.plot(ajOrig,bjOrig,"o",color="green",markersize=10)
-                plt.plot(aj,bj,"o",color="lawngreen",markersize=10)
-                plt.plot(cjOrig,djOrig,"x",color="blue",markersize=15)
-                plt.plot(cj,dj,"x",color="cyan",markersize=15)
+                # plt.plot(ajOrig,bjOrig,"o",color="green",markersize=10)
+                # plt.plot(aj,bj,"o",color="lawngreen",markersize=10)
                 
+                plt.plot(cjOrig,djOrig,polemarkers[j],color="blue",markersize=15)
+                plt.plot(cj,dj,polemarkers[j],color="cyan",markersize=15)
                 
-                # plt.text(ajOrig,bjOrig+0.1,"({}, {})".format(round(ajOrig,2),round(bjOrig,2)))
-                # plt.text(aj,bj+0.1,"({}, {})".format(round(aj,2),round(bj,2)))
-                
-                # plt.text(cjOrig,djOrig+0.1,"({}, {})".format(round(cjOrig,2),round(djOrig,2)))
-                # plt.text(cj,dj+0.1,"({}, {})".format(round(cj,2),round(dj,2)))
                 
             #Again for correct legend:
-            plt.plot(cjOrig,djOrig,"x",color="blue",label="Original poles",markersize=15)
-            plt.plot(cj,dj,"x",color="cyan",label="Reconstructed poles",markersize=15)
-            plt.plot(ajOrig,bjOrig,"o",color="green",label="Original residues",markersize=10)
-            plt.plot(aj,bj,"o",color="lawngreen",label="Reconstructed residues",markersize=10)
+            plt.plot(cjOrig,djOrig,polemarkers[j],color="blue",label="Original poles",markersize=15)
+            plt.plot(cj,dj,polemarkers[j],color="cyan",label="Reconstructed poles",markersize=15)
+            
+            # plt.plot(ajOrig,bjOrig,"o",color="green",label="Original residues",markersize=10)
+            # plt.plot(aj,bj,"o",color="lawngreen",label="Reconstructed residues",markersize=10)
             
             plt.xlim(-6,6)
             plt.ylim(-6,6)
@@ -255,6 +166,92 @@ if plot:
     
     
     
+
+from matplotlib.legend_handler import HandlerTuple
+
+    
+def plotPolesForIndex(i,ax):
+    polemarkers = ["o","^","*"]
+    msizes = [7,9,11]
+    for j in range(nbrOfPoles):
+        #Only plot the poles
+        cj = predicData[i][nbrWs + 4*j + 2]
+        dj = predicData[i][nbrWs + 4*j + 3]
+        cjOrig = rhovaluesList[i][nbrWs + 4*j + 2]
+        djOrig = rhovaluesList[i][nbrWs + 4*j + 3]
+        
+        ax.plot(cjOrig,djOrig,polemarkers[j],color="blue",label="Original poles",markersize=msizes[j])
+        ax.plot(cj,dj,polemarkers[j],color="cyan",label="Reconstructed poles",markersize=msizes[j])
+        
+                
+                
+    ax.set_xlim([-7,7])
+    ax.set_ylim([0,7])
+    ax.grid()
+    ax.set_xlabel("Re(q)")
+    ax.set_ylabel("Im(q)")
+    
+
+def plotResiduesForIndex(i,ax):
+    resmarkers = ["o","^","*"]
+    # resmarkers = ["$1$","$2$","$3$"]
+    msizes = [7,9,11]
+    for j in range(nbrOfPoles):
+        #Only plot the poles
+        aj = predicData[i][nbrWs + 4*j]
+        bj = predicData[i][nbrWs + 4*j + 1]
+        ajOrig = rhovaluesList[i][nbrWs + 4*j]
+        bjOrig = rhovaluesList[i][nbrWs + 4*j + 1]
+        
+        ax.plot(ajOrig,bjOrig,marker=resmarkers[j],color="green",label="Original residues",markersize=msizes[j])
+        ax.plot(aj,bj,marker=resmarkers[j],color="lawngreen",label="Reconstructed residues",markersize=msizes[j])
+        
+        #Draw lines in between:
+        # ax.plot([ajOrig,aj],[bjOrig,bj],color="green")
+        
+    
+    ax.set_xlim([-7,7])
+    ax.set_ylim([0,7])
+    ax.grid()
+    ax.set_xlabel("Re(q)")
+    ax.set_ylabel("Im(q)")
+    
+#Reconstruct propagator from reconstructed spectral function and poles:
+def poles(p,N,poleList):
+    # print(poleList)
+    jsum = 0
+    for j in range(N):
+        a = poleList[j*4]
+        b = poleList[j*4+1]
+        c = poleList[j*4+2]
+        d = poleList[j*4+3]
+        nom = 2*(a*(c+p)+b*d)
+        denom = c**2 + 2*c*p + d**2 + p**2
+    
+        jsum += nom/denom
+    return jsum
+
+def reconstructProp(index):
+    from scipy import integrate
+    sigma = predicData[index][-1]
+    #If negative, -> 0
+    #If more than 1 -> 1
+    wscutoff = min(max(int(round(sigma/0.04995)),0),1)
+    
+    reconstructedPropSigma = []
+    for p in ps:
+        spectrFunc = []
+        for i in range(wscutoff,len(ws)):
+            spectrFunc.append(predicData[index][i]/(p+ws[i]))
+        
+        integral = integrate.simpson(spectrFunc,x=ws[wscutoff:])
+        prop = integral + poles(p,3, predicData[index][nbrWs:nbrWs+12])
+        reconstructedPropSigma.append(prop)
+    
+    return reconstructedPropSigma
+    
+    
+    
 getBestAndWorst = True
 if getBestAndWorst:
     #Get the best and worst test cases:
@@ -263,16 +260,27 @@ if getBestAndWorst:
     minMAEindex = 0
     minMAE = 100000
     
+    fullSortedList = []
+    
     for i in range(len(rhovaluesList)):
         MAE = 0
+        
+        #MAE on propagator
+        reconProp = reconstructProp(i)
+        combListProp = zip(propList[i],reconProp)
+        
+        #MAE on spectral function
         combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
+        
+        scale = abs(max(rhovaluesList[i][:nbrWs]))
         for orig, recon in combList:
-            # if orig < 0.01:
-            MAE += abs(orig-recon)
-            # else:
-                # MAE += 
-            # if max(orig,recon) > 0.001:
-            #     MAE += abs((orig-recon)/max(orig,recon))
+            MAE += abs(orig-recon)/(scale)
+            
+        # scale = abs(max(propList[i]))
+        # for orig, recon in combListProp:
+        #     MAE += abs(orig-recon)/scale
+            
+    
         
         if MAE > maxMAE: 
             maxMAE = MAE
@@ -280,36 +288,133 @@ if getBestAndWorst:
         if MAE < minMAE:
             minMAE = MAE
             minMAEindex = i
+        
+        fullSortedList.append((MAE,i))
     
-    fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)
-    fig.suptitle("Best (top) and worst (bottom) reconstructed spectral density functions")
+    fullSortedList.sort()
     
-    ax2.plot(ws,rhovaluesList[minMAEindex][:nbrWs],label="Original")
-    ax2.plot(ws,predicData[minMAEindex][:nbrWs],label="Reconstructed")
-    ax2.legend()
-    ax2.set_xlabel("ω")
-    ax2.set_ylabel("ρ(ω)")
-    
-    ax4.plot(ws,rhovaluesList[maxMAEindex][:nbrWs],label="Original")
-    ax4.plot(ws,predicData[maxMAEindex][:nbrWs],label="Reconstructed")
-    ax4.legend()
-    ax4.set_xlabel("ω")
-    ax4.set_ylabel("ρ(ω)")
-    
-    ax1.plot(ps,propList[minMAEindex],label="Propagator")
-    # ax3.plot(ps,predicData[i+2*step][:nbrWs],label="Reconstructed")
-    ax1.legend()
-    ax1.set_xlabel("p")
-    ax1.set_ylabel("D(p²)")
-    
-    ax3.plot(ps,propList[maxMAEindex],label="Propagator")
-    # ax4.plot(ws,predicData[i+3*step][:nbrWs],label="Reconstructed")
-    ax3.legend()
-    ax3.set_xlabel("p")
-    ax3.set_ylabel("D(p²)")
     
     print("Min. MAE:",minMAE)
     print("Max. MAE:",maxMAE)
+
+    # print("best:",minMAEindex)
+    percentile25th = fullSortedList[round(len(fullSortedList)/4)][1]
+    # print("25prct",percentile25th)
+    percentile50th = fullSortedList[round(2*len(fullSortedList)/4)][1]
+    # print("50prct",percentile50th)
+    percentile75th = fullSortedList[round(3*len(fullSortedList)/4)][1]
+    # print("75prct",percentile75th)
+    # print("worst:",maxMAEindex)
+    print("best,25prct,50prct,75prct,worst:", \
+          [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex])
+    
+    
+    
+    fig, ((ax11,ax12,ax13,ax14),(ax21,ax22,ax23,ax24),(ax31,ax32,ax33,ax34), \
+          (ax41,ax42,ax43,ax44),(ax51,ax52,ax53,ax54)) = plt.subplots(5,4)
+    
+    plotPolesForIndex(minMAEindex, ax13)
+    plotPolesForIndex(percentile25th,ax23)
+    plotPolesForIndex(percentile50th,ax33)
+    plotPolesForIndex(percentile75th,ax43)
+    plotPolesForIndex(maxMAEindex, ax53)
+    
+    plotResiduesForIndex(minMAEindex, ax14)
+    plotResiduesForIndex(percentile25th,ax24)
+    plotResiduesForIndex(percentile50th,ax34)
+    plotResiduesForIndex(percentile75th,ax44)
+    plotResiduesForIndex(maxMAEindex, ax54)
+    
+    
+    ax11.plot(ps,propList[minMAEindex],label="Propagator")
+    ax11.plot(ps,reconstructProp(minMAEindex),"--",label="Reconstructed propagator",color="red")
+    ax11.set_xlabel("p")
+    ax11.set_ylabel("D(p²)")
+    
+    ax12.plot(ws,rhovaluesList[minMAEindex][:nbrWs],label="Spectral function")
+    ax12.plot(ws,predicData[minMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    ax12.set_xlabel("ω")
+    ax12.set_ylabel("ρ(ω)")
+    
+    ax21.plot(ps,propList[percentile25th],label="Propagator")
+    ax21.plot(ps,reconstructProp(percentile25th),"--",label="Reconstructed propagator",color="red")
+    ax21.set_xlabel("p")
+    ax21.set_ylabel("D(p²)")
+    
+    ax22.plot(ws,rhovaluesList[percentile25th][:nbrWs],label="Spectral function")
+    ax22.plot(ws,predicData[percentile25th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    ax22.set_xlabel("ω")
+    ax22.set_ylabel("ρ(ω)")
+    
+    ax31.plot(ps,propList[percentile50th],label="Propagator")
+    ax31.plot(ps,reconstructProp(percentile50th),"--",label="Reconstructed propagator",color="red")
+    ax31.set_xlabel("p")
+    ax31.set_ylabel("D(p²)")
+    
+    ax32.plot(ws,rhovaluesList[percentile50th][:nbrWs],label="Spectral function")
+    ax32.plot(ws,predicData[percentile50th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    ax32.set_xlabel("ω")
+    ax32.set_ylabel("ρ(ω)")
+    
+    ax41.plot(ps,propList[percentile75th],label="Propagator")
+    ax41.plot(ps,reconstructProp(percentile75th),"--",label="Reconstructed propagator",color="red")
+    ax41.set_xlabel("p")
+    ax41.set_ylabel("D(p²)")
+    
+    ax42.plot(ws,rhovaluesList[percentile75th][:nbrWs],label="Spectral function")
+    ax42.plot(ws,predicData[percentile75th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    ax42.set_xlabel("ω")
+    ax42.set_ylabel("ρ(ω)")
+    
+    ax51.plot(ps,propList[maxMAEindex],label="Propagator")
+    ax51.plot(ps,reconstructProp(maxMAEindex),"--",label="Reconstructed propagator",color="red")
+    ax51.set_xlabel("p")
+    ax51.set_ylabel("D(p²)")
+    
+    ax52.plot(ws,rhovaluesList[maxMAEindex][:nbrWs],label="Spectral function")
+    ax52.plot(ws,predicData[maxMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    ax52.set_xlabel("ω")
+    ax52.set_ylabel("ρ(ω)")
+    
+    handles, labels = ax11.get_legend_handles_labels()
+    ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
+    
+    handles, labels = ax12.get_legend_handles_labels()
+    ax12.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
+    
+    handles,labels = ax13.get_legend_handles_labels()
+    origTuple = (handles[0],handles[2],handles[4])
+    reconTuple = (handles[1],handles[3],handles[5])
+    labels = ["Original poles", "Reconstructed poles"]
+    ax13.legend((origTuple,reconTuple),labels,scatterpoints=3,
+                numpoints=1, handler_map={tuple: HandlerTuple(ndivide=3,pad=1.3)},
+                loc="upper center",bbox_to_anchor=(0.5,1.5),handlelength=4)
+    
+    handles,labels = ax14.get_legend_handles_labels()
+    origTuple = (handles[0],handles[2],handles[4])
+    reconTuple = (handles[1],handles[3],handles[5])
+    labels = ["Original residues", "Reconstructed residues"]
+    ax14.legend((origTuple,reconTuple),labels,scatterpoints=3,
+                numpoints=1, handler_map={tuple: HandlerTuple(ndivide=3,pad=1.3)},
+                loc="upper center",bbox_to_anchor=(0.5,1.5),handlelength=4)
+    
+    fig.set_tight_layout(True)
+    
+    
+    
+    # index = percentile75th
+    
+    
+    # plt.figure()
+    # plt.plot(ps,propList[index],label="Original propagator")
+    # plt.plot(ps,reconstructedProp,label="Reconstructed propagator,sigma=0")
+    # plt.plot(ps,reconstructProp(index),label="Reconstructed propagator")
+    # plt.legend()
+    
+    
+    
+    
+    
 
     
     

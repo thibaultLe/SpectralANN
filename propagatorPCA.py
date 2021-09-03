@@ -16,6 +16,8 @@ from sklearn.decomposition import PCA
 import os
 import pandas as pd
 
+noiseSize = 1e-3
+
 #Load input parameters from inputParameters.py
 maxDegreeOfLegFit = config.maxDegreeOfLegFit
 nbrOfPCAcomponents = config.nbrOfPCAcomponents
@@ -59,6 +61,19 @@ alldataValid = alldatatensorsValid[0][0].to("cpu").numpy()
 alldatatensorsTest = list(testloader)
 alldataTest = alldatatensorsTest[0][0].to("cpu").numpy()
 
+#Add noise:
+for i in range(len(alldata)):
+    noise = np.random.normal(0,noiseSize,nbrPoints)
+    alldata[i] = alldata[i] + noise
+    
+for i in range(len(alldataValid)):
+    noise = np.random.normal(0,noiseSize,nbrPoints)
+    alldataValid[i] = alldataValid[i] + noise
+
+for i in range(len(alldataTest)):
+    noise = np.random.normal(0,noiseSize,nbrPoints)
+    alldataTest[i] = alldataTest[i] + noise
+
 
 print(len(alldata),"training points")
 
@@ -88,7 +103,7 @@ def MAE(ps,index):
         X_scaled=scaler.transform(coefficientsList)
         
         for nbrComps in nbrPCAcomps:
-            if nbrComps <= maxdegree:
+            if nbrComps < maxdegree:
                 pca=PCA(n_components=nbrComps) 
                 pca.fit(X_scaled) 
                 
@@ -119,7 +134,7 @@ def most_frequent(List):
     return max(set(List), key = List.count)
 
 # MAEcounter = []
-# for i in range(0,len(alldata),10):
+# for i in range(0,len(alldata),150):
 #     MAEs = MAE(ps,i)
 #     minMAE = MAEs[0]
 #     for MAElist in MAEs:
@@ -293,18 +308,18 @@ Visual noise removal and PCA reconstruction test:
 """
 visualPlot = True
 if visualPlot:
-    i = 0
+    i = 7650
     
     plt.figure()
-    plt.plot(ps,alldataTest[i],label="Original propagator")
+    plt.plot(ps,alldata[i],label="Original propagator")
     # plt.plot(ps,np.polynomial.legendre.legval(ps,x[i]),label="Propagator Legendre fit")
     # plt.xlim(ps[0]-0.5,ps[-1]+0.5)
     # plt.ylim(min(alldata[i])-1,max(alldata[i])+10)
     
     np.random.seed(2)
-    noise = np.random.normal(1,0.001,len(alldataTest[0]))
+    noise = np.random.normal(1,0.000001,len(alldataTest[0]))
     #Possible alternative: adding instead of multiplying
-    propWithNoise = alldataTest[i] * noise
+    propWithNoise = alldata[i] * noise
     
     plt.plot(ps,propWithNoise,"o",label="Noisy propagator")
     pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
@@ -317,7 +332,7 @@ if visualPlot:
     # print("PCA cfts on original:", X_pca[i])
     print("PCA cfts for noisy prop:",noisePCAd)
     
-    psActual = np.linspace(0.01,10,nbrPoints)
+    psActual = np.linspace(pstart,pend,nbrPoints)
     # PCAreconstructed = scaler.inverse_transform(pca.inverse_transform(X_pca[i]))
     # # print("PCA reconstructed:",PCAreconstructed)
     # plt.plot(psActual,np.polynomial.legendre.legval(ps,PCAreconstructed),label="PCA reconstruction of original")
@@ -337,6 +352,17 @@ if visualPlot:
     # print("Noisy legendre:",legnoiseCfts)
     plt.title("Denoising with PCA")
     plt.legend()
+    
+    #Calculate max error of PCA reconstruction:
+    maxError = 0
+    reconstructed = np.polynomial.legendre.legval(ps,noisePCAreconstructed[0])
+    print(reconstructed[::5])
+    print(propWithNoise)
+    for i in range(len(propWithNoise)):
+        diff = propWithNoise[i] - reconstructed[::5][i]
+        if diff > maxError:
+            maxError = diff
+    print("Max error of reconstruction:",maxError)
 
 #Problem: huge errors after p = 1
 #Try to scale input data to improve ill conditioning:

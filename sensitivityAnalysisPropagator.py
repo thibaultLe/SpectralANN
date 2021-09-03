@@ -148,7 +148,7 @@ plt.plot(ps,mgabls,color="C2",label="Gamma,alpha,beta")
 plt.plot(ps,mgabis,color="C3",label="Gamma',alpha',beta'")
 plt.plot(ps,mabcds,color="C4",label="Poles")
 plt.legend()
-plt.title("Sensitivity analysis of different parameters")
+# plt.title("Sensitivity analysis of different parameters")
 plt.xlabel("p²")
 plt.ylabel("Mean elementary effect")
 

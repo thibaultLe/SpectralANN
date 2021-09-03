@@ -1,7 +1,7 @@
 from ACANN import ACANN
 from Database import Database
 from torch.nn.modules.loss import KLDivLoss,L1Loss, SmoothL1Loss
-from torch.optim import Adam,Rprop,Adamax, RMSprop,SGD,LBFGS
+from torch.optim import Adam,Rprop,Adamax, RMSprop,SGD,LBFGS,AdamW
 from torch.utils.data import DataLoader
 import torch
 import numpy as np
@@ -16,14 +16,26 @@ nbrWs = config.nbrWs
 nbrOfPoles = config.nbrOfPoles
 sizeOfTraining = config.trainingPoints 
 sizeOfValidation = config.validationPoints
-outputSize = nbrWs + (4 * nbrOfPoles)
+outputSize = nbrWs + (4 * nbrOfPoles) + 1
 print("outputsize:",outputSize)
 print("Input parameters loaded")
 
 print("Starting ACANN")
 # Create the network
 # model = ACANN(inputSize,outputSize,[62,112,212],drop_p=0.09).double()
-model = ACANN(inputSize,outputSize,[100,200,400,800],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+
+#1*100 = 1.58
+#2*100= 1.58
+#3*100 = 1.61
+#4*100 = 1.63
+
+#1*[200] -> 1.59
+#2*[200] -> 1.60
+#3* -> 1.64
+#4*[200] -> 1.66
+
+
 
 print("Model created")
 # Import the data
@@ -128,13 +140,7 @@ def validation_score(nn_model):
         G_val,A_val=next(iter(validationloader))
         prediction=nn_model.forward(G_val)
         #Prediction and A_val are tensors with lists of size batch_size
-        #The lists contain (outputSize) data values
-        
-        # print("rho_val",A_val[0])
-        # print("Len rho val:",len(A_val[0]))
-        # print("prediction:",prediction[0])
-        # print("Len prediction:",len(prediction[0]))
-        
+        #The lists contain (outputSize) data values        
         score=val_error(prediction,A_val)
     #Turn training mode back on
     nn_model.train()
@@ -155,12 +161,16 @@ print("##############################")
 print("Starting the training")
 
 # Training
+best_valscore = 10000
+EarlyStop = False
 MAEs = []
 for e in range(epochs):
+    if EarlyStop:
+        break
     #Turn training mode on
     model.train()
     #  Load a minibatch
-    for D,A in trainloader:
+    for D,rho in trainloader:
         # print("D:",D)
         # print("A:",A)
         step+=1
@@ -169,8 +179,8 @@ for e in range(epochs):
         # compute the loss
         prediction = model.forward(D)
         # print(prediction)
-        # loss = error(eval_output(prediction),A)
-        loss = error(prediction,A)
+        # loss = error(eval_output(prediction),rho)
+        loss = error(prediction,rho)
         # Compute the gradient and optimize
         loss.backward()
         optimizer.step()
@@ -181,12 +191,20 @@ for e in range(epochs):
             print("Epoch {}/{} : ".format(e+1,epochs),
                   "Training MAE = {} -".format(loss.item()),
                   "Validation MAE = {}".format(validation_score(model)))
+            
+            #Early stopping: only save the best validation MAE
+            if validation_score(model) < best_valscore:
+                best_valscore = validation_score(model)
+                torch.save(model.state_dict(),'savedNNmodel.pth')
+        
     MAEs.append(validation_score(model))
-torch.save(model.state_dict(),'savedNNmodel.pth')
-print("Saved model")
+    
+    
+print("Saved model with validation MAE of", best_valscore)
+    
 
 plt.figure()
-plt.plot(range(epochs),MAEs)
+plt.plot(list(range(1,len(MAEs)+1)),MAEs)
 plt.title("Validation loss")
 plt.xlabel("Epochs")
 plt.ylabel("MAE")

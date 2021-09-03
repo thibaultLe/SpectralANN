@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 
 np.seterr('raise')
 cacheSize = 2048
+random.seed(64)
 
 #w,Z,m2,lam2 = floats
 #N1 = int
@@ -100,7 +101,7 @@ def poles(p2,N,abcds):
 def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p2):
     try:
         #Integrate over w^2
-        res = integrate.quad(rhoint,0.01+sigma,5,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
+        res = integrate.quad(rhoint,0.01+sigma,10,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
               + poles(p2,N,abcds)
     except:
         print(Z,m2,lam2,ABCs,gabl,gabi,p2)
@@ -108,9 +109,6 @@ def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p2):
         
     return res
         
-"""
-TODO: Check correctness of spectral densities (some -> inf at zero)
-"""
         
 
 if __name__ == "__main__":
@@ -134,23 +132,23 @@ if __name__ == "__main__":
     sigmas = np.linspace(0,1,2)
     #Z in [1,10]
     # Z = 1
-    Zs = np.linspace(1,10,2)
+    Zs = np.linspace(1,10,3)
     #m2 in [0,5]
     # m2 = 3
-    m2s = np.linspace(2,5,2)
+    m2s = np.linspace(2,5,3)
     #lam2 in ]0,5] 
     # lam2 = 2
-    lam2s = np.linspace(1,4,2)
+    lam2s = np.linspace(1,4,3)
     #Extra constraint: w^2 + m^2 / lam2 > 1
     #Extra constraint: lam2 > 0
     #Extra constraint: Beta L/i > 0
     
     #N1,N2,N3 in [1,5] (int)
     # N1s = [1,3]
-    Ns  = [i for i in range(1,5,2)]
-    N1s = [i for i in range(1,5,2)]
-    N2s = [i for i in range(1,5,2)]
-    N3s = [i for i in range(1,5,2)]
+    Ns  = [i for i in range(1,4)]
+    N1s = [i for i in range(1,4)]
+    N2s = [i for i in range(1,4)]
+    N3s = [i for i in range(1,4)]
     
     def checkSingularity(w,B,C):
         w2 = w**2
@@ -165,7 +163,7 @@ if __name__ == "__main__":
     # C = 0 caused large propagator in: 
     # 5.0 5.0 4.5 ((-5, 5, 2, -2),) ((-3, 1, 0),) ((-2, 5, 5),) ((-2, 3, 5),)
     # T = list(itertools.product(*[[-3,0,3],[-3,1,3],[-3,1,3]]))
-    T = list(itertools.product(*[[-3,3],[-3,3],[-3,3]]))
+    T = list(itertools.product(*[[-5,-2,2,5],[-5,-2,2,5],[-5,-2,2,5]]))
     noSingularitiesT = []
     for ABC in T:
         singularityFound = False
@@ -175,16 +173,18 @@ if __name__ == "__main__":
         if not singularityFound:
             noSingularitiesT.append(ABC)
             # print("Kept", ABC[1],ABC[2])
-        else:
-            print("Removed B={},C={} due to possible singularity".format(ABC[1],ABC[2]))
-        
-    # print(T)
+        # else:
+        #     print("Removed B={},C={} due to possible singularity".format(ABC[1],ABC[2]))
+    
     ABCNs = []
     for N1 in N1s:
-        ABCs = list(itertools.product(noSingularitiesT,repeat=N1))        
-        ABCNs.append(ABCs)
-    
-       
+        ABCs = list(itertools.combinations_with_replacement(noSingularitiesT,N1))
+        sampled_ABCs = []
+        for ABC in ABCs:
+            if random.random() < 0.002:
+                sampled_ABCs.append(ABC)
+        ABCNs.append(sampled_ABCs)
+        
     
     # #alfa,beta in [0,5]
     # #gamma in [-5,5]
@@ -194,18 +194,24 @@ if __name__ == "__main__":
     # T = list(itertools.product(*[[-5,-2,2,5],[1,3,5],[1,3,5]]))
     # T = list(itertools.product(*[[-5,1,5],[1,3,5],[1,3,5]]))
     T = list(itertools.product(*[[-3,3],[1,5],[1,5]]))
-    
     gablNs = []
     for N2 in N2s:
-        gabls = list(itertools.product(T,repeat=N2))
-        # print(gabls)
-        # print("L funcs:",N2,"len:",len(gabls))
+        gabls = list(itertools.combinations_with_replacement(T,N2))
         gablNs.append(gabls)
     
     # gami = N3 * [1]
     # alfai = N3 * [1]
     # betai = N3 * [1]
-    gabiNs = gablNs.copy()
+    # gabiNs = gablNs.copy()
+    T = list(itertools.product(*[[-3,3],[1,3,5],[1,3,5]]))
+    gabiNs = []
+    for N3 in N3s:
+        gabis = list(itertools.combinations_with_replacement(T,N3))
+        sampled_gabis = []
+        for gab in gabis:
+            if random.random() < 0.2:
+                sampled_gabis.append(gab)
+        gabiNs.append(sampled_gabis)
     
     # #N in [0,3] (int)
     # N = 1
@@ -216,9 +222,19 @@ if __name__ == "__main__":
     T = list(itertools.product(*[[-3,3],[1,5],[-3,3],[1,5]]))
     abcdNs = []
     for N in Ns:
-        abcds = list(itertools.product(T,repeat=N))
+        abcds = list(itertools.combinations_with_replacement(T,N))
+        # abcds = list(itertools.product(T,repeat=N))
         # print("poles:",N,"len:",len(abcds))
-        abcdNs.append(abcds)
+        sampled_abcds = []
+        for abcd in abcds:
+            if random.random() < 0.05:
+                sampled_abcds.append(abcd)
+        
+        
+        # print(abcds)
+        # print(sortedByFirst[-1])
+        abcdNs.append(sampled_abcds)
+        # abcdNs.append(abcds)
         
         
     
@@ -229,19 +245,19 @@ if __name__ == "__main__":
     #Iterator over all possible combinations of parameters
     #Currently only 1 pole,ABC,gami and gaml
     """
-    TODO: more poles, ABCs in data generation 
     TODO: Check physicality of spectral density function/propagator
     """
-    
+    #                    3             2    5       2    3
     names = ["sig","Z","m2","lam2","abcd","ABC","gabl","gabi"]
-    sub = [sigmas,Zs,m2s,lam2s,abcdNs[0],ABCNs[0],gablNs[0],gabiNs[0]]
+    sub = [sigmas,Zs,m2s,lam2s,abcdNs[2],ABCNs[2],gablNs[1],gabiNs[1]]
+    
     
     totalSize = 1
-    print("Parameters:")
+    # print("Parameters:")
     for i in range(len(sub)):
         totalSize = totalSize * len(sub[i])
-        print(names[i],sub[i])
-    print("Size of all data points:",totalSize)
+        # print(names[i],len(sub[i]))
+    print("\nMax number of data points:",totalSize)
     iterator = itertools.product(*sub)
     
     
@@ -277,7 +293,6 @@ if __name__ == "__main__":
     
     start = time.time()
     
-    random.seed(64)
     
     counter = 0
     counterPos = 0
@@ -289,7 +304,7 @@ if __name__ == "__main__":
     
     desiredDataSize = 10000
     print("Desired training data size:",desiredDataSize)
-    print("Percentage of training set selected:",round(100*desiredDataSize/totalSize,2),"%")
+    print("Percentage of training set selected:",round(100*desiredDataSize/totalSize,4),"%")
     
     # Print iterations progress
     def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
@@ -313,12 +328,22 @@ if __name__ == "__main__":
         if iteration == total: 
             print()
     
+    # print("{}% chance".format(3*3*4.5*1.5*3*2*desiredDataSize/totalSize))
+    
     #Iterate over parameters (too large to fit entirely in memory)  
     printProgressBar(0, desiredDataSize, prefix = 'Progress:', suffix = 'Complete', length = 50)
+    
+    
+    """
+    #######################################
+    Calculate spectral function and propagator:
+    #######################################
+    """
+    
     for item in iterator:
         #Random sampling over the resulting parameter combinations
-        if random.random() <= 4.5*1.5*3*2*desiredDataSize/totalSize:
-            # print(item)
+        if random.random() <= 240*desiredDataSize/totalSize:
+            #                 ^ multiplicity factor to account for unlawful combinations
             
             sigma = item[0]
             Z = item[1]
@@ -336,20 +361,43 @@ if __name__ == "__main__":
             gabis = item[7]
             N3 = len(gabis)
             
-            #Calculate propagator (non negative)
+            #Calculate propagator:
             
             #Add normal noise to the values:
-            noiseLevel = 1e-5
+            # noiseLevel = 0
             
             dps = []
             negativeProp = False
-            for p in ps:
-                prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,p)
+            for i in range(len(ps)):
+                prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[i])
+                
+                # dps.append(prop + np.random.normal(scale=noiseLevel))
+                dps.append(prop)
+                
+                #Check for negative prop
                 if prop < 0:
                     negativeProp = True
                     break
-                dps.append(prop + np.random.normal(scale=noiseLevel))
-                # dps.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,p))
+                
+                #Check derivative equation
+                if i == 1:
+                    rhos0 = rho(ws[0],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
+                    rhos1 = rho(ws[1],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
+                    dp0 = dps[0] 
+                    dp1 = dps[1]
+                    pole0 = poles(ps[0],N,abcds)
+                    pole1 = poles(ps[1],N,abcds)
+                    
+                    derivativeProp = (dp1 - dp0)/(ps[1]-ps[0])
+                    derivativeRho = (rhos1 - rhos0)/(ws[1]-ws[0])
+                    derivativePoles = (pole1 - pole0)/(ps[1]-ps[0])
+                    
+                    idealDerivative = -np.pi*derivativeRho + derivativePoles
+                    if derivativeProp < idealDerivative - 0.5 or \
+                        derivativeProp > idealDerivative + 0.5:
+                        negativeProp = True
+                        break
+                
             #Propagators are >= 0, skip if it is negative anywhere
             if negativeProp: 
                 counterNeg += 1
@@ -367,18 +415,7 @@ if __name__ == "__main__":
             for w in ws:
                 rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis))
             
-            
-            #Check derivative equation
-            dp0 = dps[0] - poles(ps[0],N,abcds)
-            dp1 = dps[1] - poles(ps[1],N,abcds)
-            derivativeProp = (dp1 - dp0)/(ps[1]-ps[0])
-            derivativeRho = (rhos[1] - rhos[0])/(ws[1]-ws[0])
-            idealDerivative = -derivativeRho/2
-            if derivativeProp < idealDerivative - 0.5 or \
-               derivativeProp > idealDerivative + 0.5:
-                continue
-            
-            # print(derivativeProp,idealDerivative)
+        
             
             #Add poles to the list: (1 value at a time, add zeroes if not enough poles)
             for polecouple in abcds:
@@ -388,29 +425,21 @@ if __name__ == "__main__":
             missingPoles = 4 * nbrOfMissingPoles * [0]
             for missingPole in missingPoles:
                 rhos.append(missingPole)
+            
+            #Add sigma at end of spectral function
+            rhos.append(sigma)
                 
             
             propTempList.append(dps)
             rhoTempList.append(rhos)
-            paramTempList.append([Z,m2,lam2,abcds,ABCs,gabls,gabis])
+            paramTempList.append([sigma,Z,m2,lam2,abcds,ABCs,gabls,gabis])
                 
             counter += 1
             
             
             #Write to csv in batches
             batchSize = 400
-            if counter % batchSize == 0:
-                # print("Positive prop:", counterPos)
-                # print("Negative prop:", counterNeg)
-                
-                # print(rho1.cache_info())
-                # plt.figure()
-                # plt.plot(ps,dps)
-                # plt.title("Propagator")
-                # plt.figure()
-                # plt.title("Spectral density")
-                # plt.plot(ws,rhos)
-                
+            if counter % batchSize == 0:                
                 #3 out of every 4 points to the training set
                 #1 out of every 4 points alternatively to validation and testing
                 #75% train, 12.5% validation, 12.5% testing
@@ -451,28 +480,22 @@ if __name__ == "__main__":
                 paramTempList = []
                 
                 pointsPerSecond = round(batchSize/(time.time()-start),2)
-                minsRemaining = round((desiredDataSize - counter*4/3) / (pointsPerSecond*60),2)
+                minsRemaining = round((desiredDataSize - counter*3/4) / (pointsPerSecond*60),2)
                 # print("\nWrote to file")
                 # print("{} points done".format(counterPos))
                 # print("{} points per second".format(round(batchSize/(time.time()-start),2)))
                 # print("{}% finished\n".format(round(100*counter/(desiredDataSize*1.5),2)))
-                printProgressBar(counter*4/3, desiredDataSize, prefix = 'Progress:', \
+                printProgressBar(counter*3/4, desiredDataSize, prefix = 'Progress:', \
                                  suffix = 'Complete,{} mins remaining, {} per sec'.format(minsRemaining,pointsPerSecond), length = 30)
                             
                 #Stop when desired data size is reached
-                if counter*4/3 >= desiredDataSize:
-                    break
+                # if counter*3/4 >= desiredDataSize:
+                #     print("early stop")
+                #     break
                 start = time.time()
                 
 
-            
-            #Calculate density function
-            #Tradeoff: calculate and store it (more storage usage), faster eval in NN
-            #          or calculate during eval in NN -> slower NN eval, less heavy data
-            # rhos = []
-            # for w in ws:
-            #     rhofile.write(str(rho(w,Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)))
-                # rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis))
+
             
         
     
@@ -483,13 +506,11 @@ if __name__ == "__main__":
     print("{} validation points".format(nbrOfValidationPoints))
     print("{} testing points".format(nbrOfValidationPoints))
         
-    nbrOfNormalDists = 66
     nbrOfPoles = 3
     maxDegreeOfLegFit = 30
     nbrOfPCAcomponents = 15
     #Write parameters to file:
     params = open("inputParameters.py","w")
-    params.write("nbrOfNormalDists = {}\n".format(nbrOfNormalDists))
     params.write("nbrOfPoles = {}\n".format(nbrOfPoles))
     params.write("maxDegreeOfLegFit = {}\n".format(maxDegreeOfLegFit))
     params.write("nbrOfPCAcomponents = {}\n".format(nbrOfPCAcomponents))
