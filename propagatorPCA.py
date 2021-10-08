@@ -224,7 +224,7 @@ print("Data conversion to PCA components succesfull.")
 """
 Test of actual propagator:
 """
-TEST_ACTUAL = False
+TEST_ACTUAL = True
 if TEST_ACTUAL:
     #Read test data and convert to proper list
     file = open("testPropData.txt","r")
@@ -248,7 +248,7 @@ if TEST_ACTUAL:
         newlist.append(partlist)
         
     
-    psT = [item[0] for item in newlist]
+    psT = [item[0]**2 for item in newlist]
     dp2s = [item[1] for item in newlist]
     errors = [item[2] for item in newlist]
     
@@ -259,15 +259,12 @@ if TEST_ACTUAL:
     dp2s = list(lists[1])
     errors = list(lists[2])
     
-    psT.append(10)
-    dp2s.append(0)
-    errors.append(errors[-1])
     
     
     # plt.figure()
     # plt.plot(psT,dp2s,"o")
     # plt.figure()
-    # plt.plot(ps,dp2s)
+    # plt.plot(psT,dp2s)
     
     # psScaled = np.linspace(-1,1,len(psT))
     from scipy.interpolate import interp1d
@@ -278,13 +275,37 @@ if TEST_ACTUAL:
     
     coefficients = np.polynomial.legendre.legfit(ps,dp2sInter,maxdegree).reshape(1,-1)
     
+    
     X_scaled=scaler.transform(coefficients)
     X_pcaTestActual=pca.transform(X_scaled) 
     
+    
     print(X_pcaTestActual)
+    # print(len(X_pcaTestActual))
     # print(X_pcaTest)
     # print(len(X_pcaTest))
     X_pcaTest[-1] = X_pcaTestActual
+    
+    import csv
+    with open(path+'DTestRaw.csv') as inf:
+        reader = csv.reader(inf.readlines())
+
+    with open(path+'DTestRaw.csv', 'w') as outf:
+        writer = csv.writer(outf)
+        counter = 0
+        for line in reader:
+            if counter == 17949:
+                writer.writerow(dp2sInter)
+                print("########################")
+                print("Wrote dp2sInter")
+                print("########################")
+                print("########################")
+                break
+            else:
+                counter += 1
+                writer.writerow(line)
+                
+        writer.writerows(reader)
 
 propTestdf = pd.DataFrame(X_pcaTest)
 propTestdf.to_csv(propTest_csv,index=False,header=False,mode='a')
@@ -317,9 +338,9 @@ if visualPlot:
     # plt.ylim(min(alldata[i])-1,max(alldata[i])+10)
     
     np.random.seed(2)
-    noise = np.random.normal(1,0.000001,len(alldataTest[0]))
+    # noise = np.random.normal(1,0.000001,len(alldataTest[0]))
     #Possible alternative: adding instead of multiplying
-    propWithNoise = alldata[i] * noise
+    propWithNoise = alldata[i]
     
     plt.plot(ps,propWithNoise,"o",label="Noisy propagator")
     pWNlegfit = np.polynomial.legendre.legfit(ps,propWithNoise,maxdegree)
@@ -355,14 +376,17 @@ if visualPlot:
     
     #Calculate max error of PCA reconstruction:
     maxError = 0
+    avgError = 0
     reconstructed = np.polynomial.legendre.legval(ps,noisePCAreconstructed[0])
     print(reconstructed[::5])
     print(propWithNoise)
     for i in range(len(propWithNoise)):
-        diff = propWithNoise[i] - reconstructed[::5][i]
+        diff = abs(propWithNoise[i] - reconstructed[::5][i])
+        avgError += diff
         if diff > maxError:
             maxError = diff
     print("Max error of reconstruction:",maxError)
+    print("Average error:",avgError/len(propWithNoise))
 
 #Problem: huge errors after p = 1
 #Try to scale input data to improve ill conditioning:

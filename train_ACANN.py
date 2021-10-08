@@ -25,15 +25,13 @@ print("Starting ACANN")
 # model = ACANN(inputSize,outputSize,[62,112,212],drop_p=0.09).double()
 model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
 
-#1*100 = 1.58
-#2*100= 1.58
-#3*100 = 1.61
-#4*100 = 1.63
+epochs = 100
+batch_size_train = 100
 
-#1*[200] -> 1.59
-#2*[200] -> 1.60
-#3* -> 1.64
-#4*[200] -> 1.66
+#100k: 0.26 on epoch 119 of 200 (6x800)
+#0.198 epoch 179, 0.190 e190 nothing better at 275 (8x1000)
+#0.27 epoch 96 (10x1500) 0.24 epoch 260
+
 
 
 
@@ -43,7 +41,7 @@ path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplina
 train_data = Database(csv_target= path + "rhoTraining.csv",csv_input= path + "DTraining.csv",nb_data=sizeOfTraining).get_loader()
 validation_data=Database(csv_target= path + "rhoValidation.csv",csv_input= path + "DValidation.csv",nb_data=sizeOfValidation).get_loader()
 
-trainloader = DataLoader(train_data,batch_size=100,shuffle=True)
+trainloader = DataLoader(train_data,batch_size=batch_size_train,shuffle=True)
 validationloader = DataLoader(validation_data,batch_size=100)
 # print("Training:",list(trainloader))
 # print("Validation:",list(validationloader))
@@ -153,9 +151,8 @@ error = L1Loss()
 optimizer = Adam(model.parameters())
 
 # Training parameters
-epochs = 100
 step=-1
-print_every = 100
+print_every = batch_size_train
 print("##############################")
 print("##############################")
 print("Starting the training")

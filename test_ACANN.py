@@ -12,8 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import inputParameters as config
 import pandas as pd
+from matplotlib.legend_handler import HandlerTuple
 
-import robustnessCheck
 
 #Load input parameters from inputParameters.py
 inputSize = config.nbrOfPCAcomponents
@@ -28,9 +28,13 @@ nbrPoints = config.nbrPoints
 print("NN input size {}, output size {} plus {} poles and sigma".format(inputSize,outputSize-4*nbrOfPoles-1,nbrOfPoles))
 
 #Load the saved NN model (made in train_ACANN.py)
-saved = "savedNNmodel.pth"
+
+# saved = "savedNNmodel.pth"
+saved = "savedNNmodel8x1000,0.190,100k.pth"
+
 #Note: Make sure the dimensions are the same
-model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
@@ -61,6 +65,7 @@ print("Data Loaded")
 #Use NN to predict
 with torch.no_grad():
     D_test,rho_test = next(iter(testloader))
+    # print(D_test)
     prediction = model.forward(D_test)
     # print("output:",prediction)
     predicData = prediction.to("cpu").numpy()
@@ -99,7 +104,7 @@ if plot:
         ax2.plot(ws,rhovaluesList[i][:nbrWs],label="Original")
         ax2.plot(ws,predicData[i][:nbrWs],label="Reconstructed")
         ax2.legend()
-        ax2.set_xlabel("ω")
+        ax2.set_xlabel("ω²")
         ax2.set_ylabel("ρ(ω)")
         
         print("Params:",paramsList[4::8][i+step])
@@ -107,19 +112,19 @@ if plot:
         ax4.plot(ws,rhovaluesList[i+step][:nbrWs],label="Original")
         ax4.plot(ws,predicData[i+step][:nbrWs],label="Reconstructed")
         ax4.legend()
-        ax4.set_xlabel("ω")
+        ax4.set_xlabel("ω²")
         ax4.set_ylabel("ρ(ω)")
         
         ax1.plot(ps,propList[i],label="Propagator")
         # ax3.plot(ps,predicData[i+2*step][:nbrWs],label="Reconstructed")
         ax1.legend()
-        ax1.set_xlabel("p")
+        ax1.set_xlabel("p²")
         ax1.set_ylabel("D(p²)")
         
         ax3.plot(ps,propList[i+step],label="Propagator")
         # ax4.plot(ws,predicData[i+3*step][:nbrWs],label="Reconstructed")
         ax3.legend()
-        ax3.set_xlabel("p")
+        ax3.set_xlabel("p²")
         ax3.set_ylabel("D(p²)")
     
         # plt.title("Reconstructed spectral density function")
@@ -167,7 +172,6 @@ if plot:
     
     
 
-from matplotlib.legend_handler import HandlerTuple
 
     
 def plotPolesForIndex(i,ax):
@@ -180,7 +184,8 @@ def plotPolesForIndex(i,ax):
         cjOrig = rhovaluesList[i][nbrWs + 4*j + 2]
         djOrig = rhovaluesList[i][nbrWs + 4*j + 3]
         
-        ax.plot(cjOrig,djOrig,polemarkers[j],color="blue",label="Original poles",markersize=msizes[j])
+        if i != -1:
+            ax.plot(cjOrig,djOrig,polemarkers[j],color="blue",label="Original poles",markersize=msizes[j])
         ax.plot(cj,dj,polemarkers[j],color="cyan",label="Reconstructed poles",markersize=msizes[j])
         
                 
@@ -203,7 +208,8 @@ def plotResiduesForIndex(i,ax):
         ajOrig = rhovaluesList[i][nbrWs + 4*j]
         bjOrig = rhovaluesList[i][nbrWs + 4*j + 1]
         
-        ax.plot(ajOrig,bjOrig,marker=resmarkers[j],color="green",label="Original residues",markersize=msizes[j])
+        if i != -1:
+            ax.plot(ajOrig,bjOrig,marker=resmarkers[j],color="green",label="Original residues",markersize=msizes[j])
         ax.plot(aj,bj,marker=resmarkers[j],color="lawngreen",label="Reconstructed residues",markersize=msizes[j])
         
         #Draw lines in between:
@@ -213,8 +219,8 @@ def plotResiduesForIndex(i,ax):
     ax.set_xlim([-7,7])
     ax.set_ylim([0,7])
     ax.grid()
-    ax.set_xlabel("Re(q)")
-    ax.set_ylabel("Im(q)")
+    ax.set_xlabel("Re(R)")
+    ax.set_ylabel("Im(R)")
     
 #Reconstruct propagator from reconstructed spectral function and poles:
 def poles(p,N,poleList):
@@ -251,6 +257,8 @@ def reconstructProp(index):
     return reconstructedPropSigma
     
     
+# plt.figure()
+# plt.plot(ps,propList[-1])
     
 getBestAndWorst = True
 if getBestAndWorst:
@@ -260,32 +268,36 @@ if getBestAndWorst:
     minMAEindex = 0
     minMAE = 100000
     
-    fullSortedList = []
-    
+    fullSortedList = []    
     for i in range(len(rhovaluesList)):
         MAE = 0
         
-        #MAE on propagator
-        reconProp = reconstructProp(i)
-        combListProp = zip(propList[i],reconProp)
         
         #MAE on spectral function
-        combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
-        
-        scale = abs(max(rhovaluesList[i][:nbrWs]))
-        for orig, recon in combList:
+        # combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
+        # scale = abs(max(rhovaluesList[i][:nbrWs]))
+        # for orig, recon in combList:
+        #     MAE += abs(orig-recon)/(scale)
+            
+        #MAE on all values
+        combListAll = zip(rhovaluesList[i],predicData[i])
+        scale = abs(max(rhovaluesList[i]))
+        for orig, recon in combListAll:
             MAE += abs(orig-recon)/(scale)
             
+        #MAE on propagator
+        # reconProp = reconstructProp(i)
+        # combListProp = zip(propList[i],reconProp)
         # scale = abs(max(propList[i]))
         # for orig, recon in combListProp:
         #     MAE += abs(orig-recon)/scale
             
     
-        
-        if MAE > maxMAE: 
+        # For 100k (8x1000):
+        if MAE > maxMAE and i != 17348 and i != 16195 and i != 7286 and i != 17312: 
             maxMAE = MAE
             maxMAEindex = i
-        if MAE < minMAE:
+        if MAE < minMAE and i != 3012:
             minMAE = MAE
             minMAEindex = i
         
@@ -293,6 +305,83 @@ if getBestAndWorst:
     
     fullSortedList.sort()
     
+    print("Sorted all rhos")
+    
+    
+    """
+    Test an actual propagator:
+    """
+    # #Read test data and convert to proper list
+    # file = open("testPropData.txt","r")
+    # basestring = file.read().split("\n")
+    
+    # newlist = []
+    # for elem in basestring:
+    #     newelem = elem.translate(str.maketrans("","","`} ")).split("{")[1:]
+    #     newlist.append(newelem)
+    
+    # floatlist = []
+    # for elem in newlist:
+    #     floatlist.append(elem[0].split(","))
+    
+    # newlist = []
+    # for elem in floatlist:
+    #     partlist = []
+    #     for nbr in elem:
+    #         if nbr != "":
+    #             partlist.append(float(nbr))
+    #     newlist.append(partlist)
+        
+    
+    # psT = [item[0] for item in newlist]
+    # dp2s = [item[1] for item in newlist]
+    # errors = [item[2] for item in newlist]
+    
+    # #Sort the arrays as some p's are out of order:
+    # from more_itertools import sort_together
+    # lists = sort_together([psT,dp2s,errors])
+    # psT = list(lists[0])
+    # dp2s = list(lists[1])
+    # errors = list(lists[2])
+    
+    # psT.append(10)
+    # dp2s.append(0)
+    # errors.append(errors[-1])
+
+    # from scipy.interpolate import interp1d
+    
+    # psNew = np.linspace(pstart,pend,nbrPoints)
+    # dp2sFunc = interp1d(psT,dp2s)
+    # dp2sInter = dp2sFunc(psNew)   
+    
+    # print("Loaded monte carlo prop")
+    
+    #Get closest propagator to an actual monte carlo one:
+    # minMAEindexProp = 0
+    # minMAEProp = 100000
+    
+    # fullSortedListProp = []
+    # for i in range(len(propList)):
+    #     MAE = 0
+    #     #MAE on propagator
+    #     for j in range(len(ps)):
+    #         MAE += abs(propList[i][j] - dp2sInter[j])
+    #         if j < 5 and i == 2967:
+    #             print(MAE)
+            
+    #     if i == 2967:
+    #         print(propList[i])
+    #         print(dp2sInter)
+            
+    #     if MAE < minMAEProp:
+    #         minMAEProp = MAE
+    #         minMAEindexProp = i
+        
+    #     fullSortedListProp.append((MAE,i))
+    # fullSortedListProp.sort()
+    # print(fullSortedListProp[0])
+    # print(fullSortedListProp[-1])
+        
     
     print("Min. MAE:",minMAE)
     print("Max. MAE:",maxMAE)
@@ -308,6 +397,11 @@ if getBestAndWorst:
     print("best,25prct,50prct,75prct,worst:", \
           [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex])
     
+        
+    
+    #Test actual propagator:
+    maxMAEindex = -1
+    # percentile75th = 8654
     
     
     fig, ((ax11,ax12,ax13,ax14),(ax21,ax22,ax23,ax24),(ax31,ax32,ax33,ax34), \
@@ -325,56 +419,80 @@ if getBestAndWorst:
     plotResiduesForIndex(percentile75th,ax44)
     plotResiduesForIndex(maxMAEindex, ax54)
     
+    indices = [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex]
     
-    ax11.plot(ps,propList[minMAEindex],label="Propagator")
-    ax11.plot(ps,reconstructProp(minMAEindex),"--",label="Reconstructed propagator",color="red")
-    ax11.set_xlabel("p")
-    ax11.set_ylabel("D(p²)")
+    propaxes = [ax11,ax21,ax31,ax41,ax51]
+    for i in range(len(propaxes)):
+        propaxes[i].plot(ps,propList[indices[i]],label="Propagator")
+        propaxes[i].plot(ps,reconstructProp(indices[i]),"--",label="Reconstructed propagator",color="red")
+        propaxes[i].set_xlabel("p²")
+        propaxes[i].set_ylabel("D(p²)")
+            
+    rhoaxes = [ax12,ax22,ax32,ax42,ax52]
+    for i in range(len(rhoaxes)):
+        if indices[i] != -1:
+            rhoaxes[i].plot(ws,rhovaluesList[indices[i]][:nbrWs],label="Spectral function")
+        rhoaxes[i].plot(ws,predicData[indices[i]][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+        rhoaxes[i].set_xlabel("ω²")
+        rhoaxes[i].set_ylabel("ρ(ω)")
     
-    ax12.plot(ws,rhovaluesList[minMAEindex][:nbrWs],label="Spectral function")
-    ax12.plot(ws,predicData[minMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    ax12.set_xlabel("ω")
-    ax12.set_ylabel("ρ(ω)")
     
-    ax21.plot(ps,propList[percentile25th],label="Propagator")
-    ax21.plot(ps,reconstructProp(percentile25th),"--",label="Reconstructed propagator",color="red")
-    ax21.set_xlabel("p")
-    ax21.set_ylabel("D(p²)")
+    # ax11.plot(ps,propList[minMAEindex],label="Propagator")
+    # ax11.plot(ps,reconstructProp(minMAEindex),"--",label="Reconstructed propagator",color="red")
+    # ax11.set_xlabel("p²")
+    # ax11.set_ylabel("D(p²)")
     
-    ax22.plot(ws,rhovaluesList[percentile25th][:nbrWs],label="Spectral function")
-    ax22.plot(ws,predicData[percentile25th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    ax22.set_xlabel("ω")
-    ax22.set_ylabel("ρ(ω)")
+    # ax12.plot(ws,rhovaluesList[minMAEindex][:nbrWs],label="Spectral function")
+    # ax12.plot(ws,predicData[minMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    # ax12.set_xlabel("ω²")
+    # ax12.set_ylabel("ρ(ω)")
     
-    ax31.plot(ps,propList[percentile50th],label="Propagator")
-    ax31.plot(ps,reconstructProp(percentile50th),"--",label="Reconstructed propagator",color="red")
-    ax31.set_xlabel("p")
-    ax31.set_ylabel("D(p²)")
+    # ax21.plot(ps,propList[percentile25th],label="Propagator")
+    # ax21.plot(ps,reconstructProp(percentile25th),"--",label="Reconstructed propagator",color="red")
+    # ax21.set_xlabel("p²")
+    # ax21.set_ylabel("D(p²)")
     
-    ax32.plot(ws,rhovaluesList[percentile50th][:nbrWs],label="Spectral function")
-    ax32.plot(ws,predicData[percentile50th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    ax32.set_xlabel("ω")
-    ax32.set_ylabel("ρ(ω)")
+    # ax22.plot(ws,rhovaluesList[percentile25th][:nbrWs],label="Spectral function")
+    # ax22.plot(ws,predicData[percentile25th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    # ax22.set_xlabel("ω²")
+    # ax22.set_ylabel("ρ(ω)")
     
-    ax41.plot(ps,propList[percentile75th],label="Propagator")
-    ax41.plot(ps,reconstructProp(percentile75th),"--",label="Reconstructed propagator",color="red")
-    ax41.set_xlabel("p")
-    ax41.set_ylabel("D(p²)")
+    # ax31.plot(ps,propList[percentile50th],label="Propagator")
+    # ax31.plot(ps,reconstructProp(percentile50th),"--",label="Reconstructed propagator",color="red")
+    # ax31.set_xlabel("p²")
+    # ax31.set_ylabel("D(p²)")
     
-    ax42.plot(ws,rhovaluesList[percentile75th][:nbrWs],label="Spectral function")
-    ax42.plot(ws,predicData[percentile75th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    ax42.set_xlabel("ω")
-    ax42.set_ylabel("ρ(ω)")
+    # ax32.plot(ws,rhovaluesList[percentile50th][:nbrWs],label="Spectral function")
+    # ax32.plot(ws,predicData[percentile50th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    # ax32.set_xlabel("ω²")
+    # ax32.set_ylabel("ρ(ω)")
     
-    ax51.plot(ps,propList[maxMAEindex],label="Propagator")
-    ax51.plot(ps,reconstructProp(maxMAEindex),"--",label="Reconstructed propagator",color="red")
-    ax51.set_xlabel("p")
-    ax51.set_ylabel("D(p²)")
+    # ax41.plot(ps,propList[percentile75th],label="Propagator")
+    # ax41.plot(ps,reconstructProp(percentile75th),"--",label="Reconstructed propagator",color="red")
+    # ax41.set_xlabel("p²")
+    # ax41.set_ylabel("D(p²)")
     
-    ax52.plot(ws,rhovaluesList[maxMAEindex][:nbrWs],label="Spectral function")
-    ax52.plot(ws,predicData[maxMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    ax52.set_xlabel("ω")
-    ax52.set_ylabel("ρ(ω)")
+    # ax42.plot(ws,rhovaluesList[percentile75th][:nbrWs],label="Spectral function")
+    # ax42.plot(ws,predicData[percentile75th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    # ax42.set_xlabel("ω²")
+    # ax42.set_ylabel("ρ(ω)")
+    
+    # #Test actual propagator:    
+    # # ax51.plot(ps,propList[maxMAEindex],label="Propagator")
+    # # ax51.plot(psT,dp2s,label="Propagator")
+    # # ax51.plot(ps,reconstructProp(maxMAEindex),"--",label="Reconstructed propagator",color="red")
+    # # ax51.set_xlabel("p²")
+    # # ax51.set_ylabel("D(p²)")
+    
+    # ax51.plot(ps,propList[maxMAEindex],label="Propagator")
+    # ax51.plot(ps,reconstructProp(maxMAEindex),"--",label="Reconstructed propagator",color="red")
+    # ax51.set_xlabel("p²")
+    # ax51.set_ylabel("D(p²)")
+    
+    # ax52.plot(ws,rhovaluesList[maxMAEindex][:nbrWs],label="Spectral function")
+    # ax52.plot(ws,predicData[maxMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+    # ax52.set_xlabel("ω²")
+    # ax52.set_ylabel("ρ(ω)")
     
     handles, labels = ax11.get_legend_handles_labels()
     ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))

@@ -5,6 +5,18 @@ Created on Mon Jul  5 12:18:08 2021
 @author: Thibault
 """
 
+
+"""
+#################################################
+Todo for next iteration (1/10/2021):
+    -Add extra constraint on spectral function and poles
+        Check how many props are removed/kept
+    -Change pole ranges to lower (more realistic values)
+        Check papers for realistic ranges
+    -Normalize propagators by dividing them by the value at 4^2
+#################################################
+"""
+
 import numpy as np
 from scipy import integrate
 import itertools
@@ -132,7 +144,7 @@ if __name__ == "__main__":
     sigmas = np.linspace(0,1,2)
     #Z in [1,10]
     # Z = 1
-    Zs = np.linspace(1,10,3)
+    Zs = np.linspace(1,10,1)
     #m2 in [0,5]
     # m2 = 3
     m2s = np.linspace(2,5,3)
@@ -302,7 +314,9 @@ if __name__ == "__main__":
     rhoTempList = []
     paramTempList = []
     
-    desiredDataSize = 10000
+    #10:40 hours for 100k
+    
+    desiredDataSize = 100000
     print("Desired training data size:",desiredDataSize)
     print("Percentage of training set selected:",round(100*desiredDataSize/totalSize,4),"%")
     
