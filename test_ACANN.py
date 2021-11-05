@@ -29,8 +29,8 @@ print("NN input size {}, output size {} plus {} poles and sigma".format(inputSiz
 
 #Load the saved NN model (made in train_ACANN.py)
 
-# saved = "savedNNmodel.pth"
-saved = "savedNNmodel8x1000,0.190,100k.pth"
+saved = "savedNNmodel.pth"
+# saved = "savedNNmodel8x1000,0.190,100k.pth"
 
 #Note: Make sure the dimensions are the same
 # model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
@@ -190,8 +190,8 @@ def plotPolesForIndex(i,ax):
         
                 
                 
-    ax.set_xlim([-7,7])
-    ax.set_ylim([0,7])
+    ax.set_xlim([0.1,0.4])
+    ax.set_ylim([0.2,0.7])
     ax.grid()
     ax.set_xlabel("Re(q)")
     ax.set_ylabel("Im(q)")
@@ -216,8 +216,8 @@ def plotResiduesForIndex(i,ax):
         # ax.plot([ajOrig,aj],[bjOrig,bj],color="green")
         
     
-    ax.set_xlim([-7,7])
-    ax.set_ylim([0,7])
+    ax.set_xlim([-1.5,1.5])
+    ax.set_ylim([0,1.2])
     ax.grid()
     ax.set_xlabel("Re(R)")
     ax.set_ylabel("Im(R)")
@@ -248,12 +248,17 @@ def reconstructProp(index):
     for p in ps:
         spectrFunc = []
         for i in range(wscutoff,len(ws)):
-            spectrFunc.append(predicData[index][i]/(p+ws[i]))
+            spectrFunc.append(predicData[index][i]/(p**2+ws[i]))
         
         integral = integrate.simpson(spectrFunc,x=ws[wscutoff:])
-        prop = integral + poles(p,3, predicData[index][nbrWs:nbrWs+12])
+        prop = integral + poles(p**2,3, predicData[index][nbrWs:nbrWs+12])
         reconstructedPropSigma.append(prop)
+        
     
+    # rescaling = reconstructedPropSigma[51]*16
+    rescaling = reconstructedPropSigma[12]
+    for i in range(len(ps)):
+        reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
     return reconstructedPropSigma
     
     
@@ -285,6 +290,11 @@ if getBestAndWorst:
         for orig, recon in combListAll:
             MAE += abs(orig-recon)/(scale)
             
+        # More weight to poles
+        # combList = zip(rhovaluesList[i][nbrWs:],predicData[i][nbrWs:])
+        # for orig, recon in combList:
+        #     MAE += 100*abs(orig-recon)
+            
         #MAE on propagator
         # reconProp = reconstructProp(i)
         # combListProp = zip(propList[i],reconProp)
@@ -294,10 +304,12 @@ if getBestAndWorst:
             
     
         # For 100k (8x1000):
-        if MAE > maxMAE and i != 17348 and i != 16195 and i != 7286 and i != 17312: 
+            # and i != 17348 and i != 16195 and i != 7286 and i != 17312
+            # and i != 3012
+        if MAE > maxMAE: 
             maxMAE = MAE
             maxMAEindex = i
-        if MAE < minMAE and i != 3012:
+        if MAE < minMAE:
             minMAE = MAE
             minMAEindex = i
         
@@ -400,7 +412,7 @@ if getBestAndWorst:
         
     
     #Test actual propagator:
-    maxMAEindex = -1
+    # maxMAEindex = -1
     # percentile75th = 8654
     
     
@@ -425,7 +437,7 @@ if getBestAndWorst:
     for i in range(len(propaxes)):
         propaxes[i].plot(ps,propList[indices[i]],label="Propagator")
         propaxes[i].plot(ps,reconstructProp(indices[i]),"--",label="Reconstructed propagator",color="red")
-        propaxes[i].set_xlabel("p²")
+        propaxes[i].set_xlabel("p")
         propaxes[i].set_ylabel("D(p²)")
             
     rhoaxes = [ax12,ax22,ax32,ax42,ax52]
@@ -437,62 +449,6 @@ if getBestAndWorst:
         rhoaxes[i].set_ylabel("ρ(ω)")
     
     
-    # ax11.plot(ps,propList[minMAEindex],label="Propagator")
-    # ax11.plot(ps,reconstructProp(minMAEindex),"--",label="Reconstructed propagator",color="red")
-    # ax11.set_xlabel("p²")
-    # ax11.set_ylabel("D(p²)")
-    
-    # ax12.plot(ws,rhovaluesList[minMAEindex][:nbrWs],label="Spectral function")
-    # ax12.plot(ws,predicData[minMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    # ax12.set_xlabel("ω²")
-    # ax12.set_ylabel("ρ(ω)")
-    
-    # ax21.plot(ps,propList[percentile25th],label="Propagator")
-    # ax21.plot(ps,reconstructProp(percentile25th),"--",label="Reconstructed propagator",color="red")
-    # ax21.set_xlabel("p²")
-    # ax21.set_ylabel("D(p²)")
-    
-    # ax22.plot(ws,rhovaluesList[percentile25th][:nbrWs],label="Spectral function")
-    # ax22.plot(ws,predicData[percentile25th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    # ax22.set_xlabel("ω²")
-    # ax22.set_ylabel("ρ(ω)")
-    
-    # ax31.plot(ps,propList[percentile50th],label="Propagator")
-    # ax31.plot(ps,reconstructProp(percentile50th),"--",label="Reconstructed propagator",color="red")
-    # ax31.set_xlabel("p²")
-    # ax31.set_ylabel("D(p²)")
-    
-    # ax32.plot(ws,rhovaluesList[percentile50th][:nbrWs],label="Spectral function")
-    # ax32.plot(ws,predicData[percentile50th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    # ax32.set_xlabel("ω²")
-    # ax32.set_ylabel("ρ(ω)")
-    
-    # ax41.plot(ps,propList[percentile75th],label="Propagator")
-    # ax41.plot(ps,reconstructProp(percentile75th),"--",label="Reconstructed propagator",color="red")
-    # ax41.set_xlabel("p²")
-    # ax41.set_ylabel("D(p²)")
-    
-    # ax42.plot(ws,rhovaluesList[percentile75th][:nbrWs],label="Spectral function")
-    # ax42.plot(ws,predicData[percentile75th][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    # ax42.set_xlabel("ω²")
-    # ax42.set_ylabel("ρ(ω)")
-    
-    # #Test actual propagator:    
-    # # ax51.plot(ps,propList[maxMAEindex],label="Propagator")
-    # # ax51.plot(psT,dp2s,label="Propagator")
-    # # ax51.plot(ps,reconstructProp(maxMAEindex),"--",label="Reconstructed propagator",color="red")
-    # # ax51.set_xlabel("p²")
-    # # ax51.set_ylabel("D(p²)")
-    
-    # ax51.plot(ps,propList[maxMAEindex],label="Propagator")
-    # ax51.plot(ps,reconstructProp(maxMAEindex),"--",label="Reconstructed propagator",color="red")
-    # ax51.set_xlabel("p²")
-    # ax51.set_ylabel("D(p²)")
-    
-    # ax52.plot(ws,rhovaluesList[maxMAEindex][:nbrWs],label="Spectral function")
-    # ax52.plot(ws,predicData[maxMAEindex][:nbrWs],"--",label="Reconstructed spectral function",color="red")
-    # ax52.set_xlabel("ω²")
-    # ax52.set_ylabel("ρ(ω)")
     
     handles, labels = ax11.get_legend_handles_labels()
     ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))

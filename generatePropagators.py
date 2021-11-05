@@ -11,9 +11,6 @@ Created on Mon Jul  5 12:18:08 2021
 Todo for next iteration (1/10/2021):
     -Add extra constraint on spectral function and poles
         Check how many props are removed/kept
-    -Change pole ranges to lower (more realistic values)
-        Check papers for realistic ranges
-    -Normalize propagators by dividing them by the value at 4^2
 #################################################
 """
 
@@ -110,9 +107,10 @@ def poles(p2,N,abcds):
 
 #Calculates the propagator out of the given parameters for the spectral
 # density function and complex conjugate poles
-def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p2):
+def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p):
     try:
         #Integrate over w^2
+        p2 = p**2
         res = integrate.quad(rhoint,0.01+sigma,10,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,p2))[0] \
               + poles(p2,N,abcds)
     except:
@@ -120,13 +118,57 @@ def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p2):
         raise RuntimeError("Error when calculating integral for propagator")
         
     return res
+
+
+#Returns true if the constraint is roughly satisfied (+-0.5)
+def constraint15(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,abcds):
+    res = integrate.quad(rho,0.01+sigma,10,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi))[0]
+    
+    for j in range(N):
+        res += 2 * abcds[j][0]
+    
+    
+    if res < 0.5 and res > -0.5:
+        return True
+    return False
+
+
+#Returns true if the constraint is satisfied
+@lru_cache(maxsize=cacheSize)
+def derivativeConstraint(dp0,dp1,rho0,rho1,abcds,N):
+    rhos0 = rho(ws[0],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
+    rhos1 = rho(ws[1],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
+    
+    derivativeRho = (rhos1 - rhos0)/(ws[1]-ws[0])
+    derivativeProp = (dp1 - dp0)/(ps[1]**2-ps[0]**2)
+    
+    # print((ps[1]**2-ps[0]**2),(ps[1]-ps[0]))
+    
+    derivativePoles = 0
+    for j in range(N):
+        a = abcds[j][0]
+        b = abcds[j][1]
+        c = abcds[j][2]
+        d = abcds[j][3]
+        #Alternate but equivalent formula:
+        derivativePoles += (-2*a*c**2 + 2*a*d**2 + 4*b*c*d)/((c**2 + d**2)**2)
+        
+    idealDerivative = -np.pi*derivativeRho - derivativePoles
+    
+    # print(derivativeProp, idealDerivative)
+    if derivativeProp < idealDerivative - 1 or \
+        derivativeProp > idealDerivative + 1:
+        return False
+    
+    # print(derivativeProp, idealDerivative)
+    return True
         
         
 
 if __name__ == "__main__":
     
     pstart = 0.01
-    pend = 10
+    pend = 7.77
     nbrPoints = 100
     # ps = np.geomspace(pstart,pend,nbrPoints)
     ps = np.linspace(pstart,pend,nbrPoints)
@@ -175,7 +217,7 @@ if __name__ == "__main__":
     # C = 0 caused large propagator in: 
     # 5.0 5.0 4.5 ((-5, 5, 2, -2),) ((-3, 1, 0),) ((-2, 5, 5),) ((-2, 3, 5),)
     # T = list(itertools.product(*[[-3,0,3],[-3,1,3],[-3,1,3]]))
-    T = list(itertools.product(*[[-5,-2,2,5],[-5,-2,2,5],[-5,-2,2,5]]))
+    T = list(itertools.product(*[[-0.5,-0.2,0.2,0.5],[-5,-2,2,5],[-5,-2,2,5]]))
     noSingularitiesT = []
     for ABC in T:
         singularityFound = False
@@ -205,7 +247,7 @@ if __name__ == "__main__":
     # betal = N2 * [1]
     # T = list(itertools.product(*[[-5,-2,2,5],[1,3,5],[1,3,5]]))
     # T = list(itertools.product(*[[-5,1,5],[1,3,5],[1,3,5]]))
-    T = list(itertools.product(*[[-3,3],[1,5],[1,5]]))
+    T = list(itertools.product(*[[-0.1,0.1],[1,5],[1,5]]))
     gablNs = []
     for N2 in N2s:
         gabls = list(itertools.combinations_with_replacement(T,N2))
@@ -215,7 +257,7 @@ if __name__ == "__main__":
     # alfai = N3 * [1]
     # betai = N3 * [1]
     # gabiNs = gablNs.copy()
-    T = list(itertools.product(*[[-3,3],[1,3,5],[1,3,5]]))
+    T = list(itertools.product(*[[-0.1,0.1],[1,3,5],[1,3,5]]))
     gabiNs = []
     for N3 in N3s:
         gabis = list(itertools.combinations_with_replacement(T,N3))
@@ -229,9 +271,14 @@ if __name__ == "__main__":
     # N = 1
     
     #Complex poles:
+        
+    #realistic values: cj ~ 0.2 to 0.35
+    #                   dj ~ 0.3 to 0.6
+    
     # #a,b,c,d in [-5,5] 
     # T = list(itertools.product([-3,3],repeat=4))
-    T = list(itertools.product(*[[-3,3],[1,5],[-3,3],[1,5]]))
+    # T = list(itertools.product(*[[-3,3],[1,5],[-3,3],[1,5]]))
+    T = list(itertools.product(*[[-1,0,1],[0.1,0.55,1],[0.15,0.25,0.35],[0.3,0.45,0.6]]))
     abcdNs = []
     for N in Ns:
         abcds = list(itertools.combinations_with_replacement(T,N))
@@ -239,7 +286,7 @@ if __name__ == "__main__":
         # print("poles:",N,"len:",len(abcds))
         sampled_abcds = []
         for abcd in abcds:
-            if random.random() < 0.05:
+            if random.random() < 0.0005:
                 sampled_abcds.append(abcd)
         
         
@@ -268,7 +315,8 @@ if __name__ == "__main__":
     # print("Parameters:")
     for i in range(len(sub)):
         totalSize = totalSize * len(sub[i])
-        # print(names[i],len(sub[i]))
+        print(names[i],len(sub[i]))
+        # print(names[i],sub[i])
     print("\nMax number of data points:",totalSize)
     iterator = itertools.product(*sub)
     
@@ -314,9 +362,13 @@ if __name__ == "__main__":
     rhoTempList = []
     paramTempList = []
     
-    #10:40 hours for 100k
+    counterConstraint15True = 0
+    counterConstraint15False = 0
     
-    desiredDataSize = 100000
+    #10:40 hours for 100k
+    #4 hours for 30k
+    
+    desiredDataSize = 30000
     print("Desired training data size:",desiredDataSize)
     print("Percentage of training set selected:",round(100*desiredDataSize/totalSize,4),"%")
     
@@ -356,7 +408,7 @@ if __name__ == "__main__":
     
     for item in iterator:
         #Random sampling over the resulting parameter combinations
-        if random.random() <= 240*desiredDataSize/totalSize:
+        if random.random() <= 550*desiredDataSize/totalSize:
             #                 ^ multiplicity factor to account for unlawful combinations
             
             sigma = item[0]
@@ -380,10 +432,20 @@ if __name__ == "__main__":
             #Add normal noise to the values:
             # noiseLevel = 0
             
+            if not constraint15(Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis,abcds):
+                counterConstraint15False += 1
+                continue
+            counterConstraint15True += 1
+            
+            
             dps = []
             negativeProp = False
+            
+            # rescaling = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[51]) * 16.06
+            rescaling = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[12]) * 1
             for i in range(len(ps)):
-                prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[i])
+                prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[i]) / rescaling
+                # prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[i])
                 
                 # dps.append(prop + np.random.normal(scale=noiseLevel))
                 dps.append(prop)
@@ -399,16 +461,8 @@ if __name__ == "__main__":
                     rhos1 = rho(ws[1],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
                     dp0 = dps[0] 
                     dp1 = dps[1]
-                    pole0 = poles(ps[0],N,abcds)
-                    pole1 = poles(ps[1],N,abcds)
                     
-                    derivativeProp = (dp1 - dp0)/(ps[1]-ps[0])
-                    derivativeRho = (rhos1 - rhos0)/(ws[1]-ws[0])
-                    derivativePoles = (pole1 - pole0)/(ps[1]-ps[0])
-                    
-                    idealDerivative = -np.pi*derivativeRho + derivativePoles
-                    if derivativeProp < idealDerivative - 0.5 or \
-                        derivativeProp > idealDerivative + 0.5:
+                    if not derivativeConstraint(dp0,dp1,rhos0,rhos1,abcds,N):
                         negativeProp = True
                         break
                 
@@ -511,7 +565,11 @@ if __name__ == "__main__":
 
 
             
-        
+    print("Constraint15 true:", counterConstraint15True)
+    print("Constraint15 false:", counterConstraint15False)
+    
+    print("Counter pos:", counterPos)
+    print("Counter neg:", counterNeg)
     
     nbrOfTrainingPoints = round(counter*3/4 if counter % 400 == 0 else (counter - counter % 400)*3/4)
     nbrOfValidationPoints = round(counter/8 if counter % 400 == 0 else (counter - counter % 400)/8)

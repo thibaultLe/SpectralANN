@@ -23,10 +23,10 @@ print("Input parameters loaded")
 print("Starting ACANN")
 # Create the network
 # model = ACANN(inputSize,outputSize,[62,112,212],drop_p=0.09).double()
-model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
 
-epochs = 100
-batch_size_train = 100
+epochs = 216
+batch_size_train = 150
 
 #100k: 0.26 on epoch 119 of 200 (6x800)
 #0.198 epoch 179, 0.190 e190 nothing better at 275 (8x1000)
@@ -42,7 +42,7 @@ train_data = Database(csv_target= path + "rhoTraining.csv",csv_input= path + "DT
 validation_data=Database(csv_target= path + "rhoValidation.csv",csv_input= path + "DValidation.csv",nb_data=sizeOfValidation).get_loader()
 
 trainloader = DataLoader(train_data,batch_size=batch_size_train,shuffle=True)
-validationloader = DataLoader(validation_data,batch_size=100)
+validationloader = DataLoader(validation_data,batch_size=100,shuffle=True)
 # print("Training:",list(trainloader))
 # print("Validation:",list(validationloader))
 print("Data Loaded")
@@ -145,6 +145,8 @@ def validation_score(nn_model):
     return score.item()
 
 
+
+
 #Define the loss
 error = L1Loss()
 #Define the optimizer
@@ -159,11 +161,8 @@ print("Starting the training")
 
 # Training
 best_valscore = 10000
-EarlyStop = False
 MAEs = []
 for e in range(epochs):
-    if EarlyStop:
-        break
     #Turn training mode on
     model.train()
     #  Load a minibatch

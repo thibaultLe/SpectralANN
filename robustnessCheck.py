@@ -13,11 +13,14 @@ Created on Thu Sep  2 17:54:33 2021
 
 #1e-3 noise,100k:
     #were erased??
-indices = [2608, 4750, 14605, 6786, 4920]
+# indices = [2608, 4750, 14605, 6786, 4920]
 # indices =  [41, 1453, 1552, 1322, 1232]
 
+#15/10
+indices = [1214, 440, 519, 563, 641]
+
 nbrOfSamples = 100
-noiseSize = 1e-3
+noiseSize = 1e-4
 
 
 from Database import Database
@@ -125,7 +128,9 @@ print("NN input size {}, output size {} plus {} poles".format(inputSize,outputSi
 # #Note: Make sure the dimensions are the same
 # model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
 
-saved = "savedNNmodel8x1000,0.190,100k.pth"
+# saved = "savedNNmodel8x1000,0.190,100k.pth"
+saved = "savedNNmodel.pth"
+
 #Note: Make sure the dimensions are the same
 # model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
 model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
@@ -225,12 +230,16 @@ def reconstructProp(reconstruction):
     for p in ps:
         spectrFunc = []
         for i in range(wscutoff,len(ws)):
-            spectrFunc.append(reconstruction[i]/(p+ws[i]))
+            spectrFunc.append(reconstruction[i]/(p**2+ws[i]))
         
         integral = integrate.simpson(spectrFunc,x=ws[wscutoff:])
-        prop = integral + poles(p,3, reconstruction[nbrWs:nbrWs+12])
+        prop = integral + poles(p**2,3, reconstruction[nbrWs:nbrWs+12])
         reconstructedPropSigma.append(prop)
     
+    rescaling = reconstructedPropSigma[51]*16
+    # rescaling = reconstructedPropSigma[12]
+    for i in range(len(ps)):
+        reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
     return reconstructedPropSigma
 
 
@@ -248,7 +257,7 @@ for i in range(len(indices)):
     
     propaxes[i].plot(ps,propList[indices[i]],label="Propagator")
     propaxes[i].plot(ps,propmeans,"--",label="Mean reconstruction",color="red")
-    propaxes[i].fill_between(ps,propmeans-propstddevs,propmeans+propstddevs,alpha=0.2, facecolor="grey",
+    propaxes[i].fill_between(ps,propmeans-propstddevs,propmeans+propstddevs,alpha=0.2, facecolor="red",
                     label='Standard deviation')
     propaxes[i].set_xlabel("p²")
     propaxes[i].set_ylabel("D(p²)")
@@ -259,7 +268,7 @@ for i in range(len(indices)):
     
     spectralaxes[i].plot(ws,rhovaluesList[indices[i]][:nbrWs],label="Original function")
     spectralaxes[i].plot(ws,means,"--",label="Mean reconstruction",color="red")
-    spectralaxes[i].fill_between(ws,means-stddevs,means+stddevs,alpha=0.2, facecolor="grey",
+    spectralaxes[i].fill_between(ws,means-stddevs,means+stddevs,alpha=0.2, facecolor="red",
                     label='Standard deviation')
     
     #Plot poles:
@@ -322,14 +331,14 @@ for i in range(len(indices)):
         # hull = ConvexHull(points)
         # polesaxes[i].fill(points[hull.vertices,0],points[hull.vertices,1],'red',alpha=0.4)
         
-    resaxes[i].set_xlim([-6,6])
-    resaxes[i].set_ylim([0,6])
+    # resaxes[i].set_xlim([-6,6])
+    # resaxes[i].set_ylim([0,6])
     resaxes[i].grid()
     resaxes[i].set_xlabel("Re(R)")
     resaxes[i].set_ylabel("Im(R)")
     
-    polesaxes[i].set_xlim([-6,6])
-    polesaxes[i].set_ylim([0,6])
+    # polesaxes[i].set_xlim([-6,6])
+    # polesaxes[i].set_ylim([0,6])
     polesaxes[i].grid()
     polesaxes[i].set_xlabel("Re(q)")
     polesaxes[i].set_ylabel("Im(q)")

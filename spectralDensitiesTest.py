@@ -15,15 +15,14 @@ from scipy import integrate
 #Z in [0,10]
 #Impact: Large
 Z = 1
-Z = 0
+# Z = 0
 #m2 in [0,5]
 #Small-medium
+# m2 = 2
 m2 = 2
-m2 = 1
 #lam2 in [0,5]
 #Large
 lam2 = 1
-lam2 = 0.5
 #Extra constraint: w^2 + m^2 / lam2 > 1
 
 #fixed gamma
@@ -36,37 +35,37 @@ N3 = 1
 
 #A,B,Cks in [-5,5] 
 #Large
-Aks = N1 * [0]
+Aks = N1 * [-0.5]
 #Small
-Bks = N1 * [4]
+Bks = N1 * [3]
 #Small
-Cks = N1 * [1]
+Cks = N1 * [5]
 
 #alfa,beta in [0,5]
 #gamma in [-5,5]
 #Small
-gaml = N2 *  [5]
+gaml = N2 *  [-0.1]
 #Small-Medium dependent on other params
-alfal = N2 * [3]
+alfal = N2 * [5]
 #Small
-betal = N2 * [1]
+betal = N2 * [5]
 
 #Small
-gami = N3 *  [2]
+gami = N3 *  [0.1]
 #Small
-alfai = N3 * [3]
+alfai = N3 * [5]
 #Small
-betai = N3 * [3]
+betai = N3 * [5]
 
 #N in [0,3] (int)
 N = 1
 
 #a,b,c,d in [-5,5] 
 #Large impact (poles + residues)
-ajs = N * [-3]
-bjs = N * [-3]
-cjs = N * [-3]
-djs = N * [-3]
+ajs = N * [10]
+bjs = N * [10]
+cjs = N * [0.3]
+djs = N * [0.5]
 
 sigma = 0
 
@@ -176,16 +175,16 @@ rhos = []
 for w in ws:
     rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi))
     
-# plt.figure()
-# plt.plot(ws,rhos)
-# plt.xlabel("ω")
-# plt.ylabel("ρ(ω)")
-# plt.title("Spectral density function")
+plt.figure()
+plt.plot(ws,rhos)
+plt.xlabel("ω")
+plt.ylabel("ρ(ω)")
+plt.title("Spectral density function")
 
 
 # ps = np.geomspace(0.001,100,100)
 pstart = 0.1
-pend = 10
+pend = 7.7
 nbrPoints = 100
 # ps = np.geomspace(pstart,pend,nbrPoints)
 ps = np.linspace(pstart,pend,nbrPoints)
@@ -206,15 +205,23 @@ dpswithpoles = []
 for p in ps:
     #Assume p's are p^2's
     # dpswithpoles.append(integrate.quad(rhoint,0.01,5,p)[0] + poles(p))
-    dpswithpoles.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p))
-    
+    dpswithpoles.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p**2))
+
+
+# rescaling = dpswithpoles[51] * 16.06
+# print(ps[11])
+# print(ps[12])
+rescaling = dpswithpoles[12] * 1
+for i in range(len(dpswithpoles)):
+    dpswithpoles[i] = dpswithpoles[i]/rescaling
+
 # plt.figure()
 # plt.plot(ps,dps)
 # plt.title("Propagator without poles")
 
-plt.figure()
-plt.plot(ps,dpswithpoles,"o")
-plt.title("Propagator with poles")
+# plt.figure()
+# plt.plot(ps,dpswithpoles)
+# plt.title("Propagator with poles")
 # plt.xscale("log")
 
 

@@ -87,9 +87,9 @@ ps = np.linspace(-1,1,nbrPoints)
 #Index is the index of the propagator we calculate the MAE for
 def MAE(ps,index):
     
-    maxdegrees = [15,20,25,30,35]
+    maxdegrees = [25,30,35]
     # maxdegrees = [30]
-    nbrPCAcomps = [10,15]
+    nbrPCAcomps = [10,15,20]
     # nbrPCAcomps = [5]
     
     MAEs = []
@@ -224,7 +224,7 @@ print("Data conversion to PCA components succesfull.")
 """
 Test of actual propagator:
 """
-TEST_ACTUAL = True
+TEST_ACTUAL = False
 if TEST_ACTUAL:
     #Read test data and convert to proper list
     file = open("testPropData.txt","r")
@@ -329,7 +329,8 @@ Visual noise removal and PCA reconstruction test:
 """
 visualPlot = True
 if visualPlot:
-    i = 7650
+    # i = 7650
+    i=0
     
     plt.figure()
     plt.plot(ps,alldata[i],label="Original propagator")
