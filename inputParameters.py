@@ -1,9 +1,7 @@
 nbrOfPoles = 3
-maxDegreeOfLegFit = 30
-nbrOfPCAcomponents = 15
-trainingPoints = 32400
-validationPoints = 5400
-pstart = 0.01
-pend = 7.77
+trainingPoints = 10200
+validationPoints = 1700
+pstart = 0
+pend = 8.25
 nbrPoints = 100
 nbrWs = 200

@@ -6,22 +6,28 @@ Created on Mon Sep 20 11:22:43 2021
 """
 import torch
 from ACANN import ACANN
-from Database import Database
 from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 import inputParameters as config
 import pandas as pd
 from matplotlib.legend_handler import HandlerTuple
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 from  torch.utils.data import TensorDataset
+
+
+#Load test data
+path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/MonteCarloDataset/"
+
+
+filename = "boot_samples.dat"
+# filename = "gluon_bare_64x4_1801Conf_20000bootsamples.dat"
+# filename = "gluon_bare_80x4_1801Conf_18010bootsamples.dat"
+
+x = np.loadtxt(path+filename)
 
 
 
 #Load input parameters from inputParameters.py
-maxDegreeOfLegFit = config.maxDegreeOfLegFit
-inputSize = config.nbrOfPCAcomponents
 nbrWs = config.nbrWs
 nbrOfPoles = config.nbrOfPoles
 sizeOfTraining = config.trainingPoints 
@@ -30,7 +36,9 @@ outputSize = nbrWs + (4 * nbrOfPoles) + 1
 pstart = config.pstart
 pend = config.pend
 nbrPoints = config.nbrPoints
+inputSize=nbrPoints
 print("NN input size {}, output size {} plus {} poles and sigma".format(inputSize,outputSize-4*nbrOfPoles-1,nbrOfPoles))
+
 
 ps = np.linspace(pstart,pend,nbrPoints)
 psInterp = np.linspace(-1,1,nbrPoints)
@@ -42,48 +50,15 @@ saved = "savedNNmodel.pth"
 # saved = "savedNNmodel8x1000,0.190,100k.pth"
 
 #Note: Make sure the dimensions are the same
-# model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
-model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+## 6*800, 100k training -> maxmae 880, huge errors
+##          10k training -> maxmae 4.9, last one is noisy
+# model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,4*[100],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,4*[400],drop_p=0.05).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
-
-path = "C:/Users/Thibault/Documents/Universiteit/\
-Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
-
-train_data = Database(csv_target= path + "rhoTraining.csv",\
-                      csv_input= path + "DTrainingRaw.csv",nb_data=sizeOfTraining).get_loader()
-trainloader = DataLoader(train_data,batch_size=sizeOfTraining)
-print("Training data loaded")
-
-alldatatensors = list(trainloader)
-alldata = alldatatensors[0][0].to("cpu").numpy()
-
-maxdegree = maxDegreeOfLegFit
-
-#Legendre fit to all propagators in training set, keeps coefficients
-coefficientsList = []
-for i in range(len(alldata)):
-    coefficientsList.append(np.polynomial.legendre.legfit(psInterp,alldata[i],maxdegree))
-
-
-x = coefficientsList
-
-#Normalise the attributes
-scaler=StandardScaler()#instantiate
-scaler.fit(x) # compute the mean and standard which will be used in the next command
-X_scaled=scaler.transform(x)
-pca=PCA(n_components=inputSize) 
-pca.fit(X_scaled) 
-X_pca=pca.transform(X_scaled) 
-print("Loaded PCA values")
-
-
-#Load test data
-path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/MonteCarloDataset/"
-
-x = np.loadtxt(path+"boot_samples.dat")
-# print(x)
 
 from scipy.interpolate import interp1d
 
@@ -123,9 +98,10 @@ print("Loaded propagators")
 # print("Len first props:",len(propLists[0]))
 # print(propLists[0])
 
+# meanProps = []
+# plt.figure()
 
 actualPropagators = []
-
 NNinputs = []
 for i in range(len(propLists)):
     psT = [item[0] for item in propLists[i]]
@@ -133,25 +109,25 @@ for i in range(len(propLists)):
     # print(psT[73])
     # if i == 1:
     #     print(psT[37],psT[38],psT[39])
-    dp2s = [item/(dp2snoscale[37]) for item in dp2snoscale]
-    # dp2s = [item/(dp2snoscale[73]*16) for item in dp2snoscale]
+    #psT[37] = 0.998
     
+    # if psT[0]<0.01:
+    #     psT[0] = 0.01
     
-    if psT[0]<0.01:
-        psT[0] = 0.01
+    # plt.plot(psT,dp2s,alpha=0.05)
+    # meanProps.append(dp2s)
     
-    dp2sFunc = interp1d(psT,dp2s)
+    dp2sFunc = interp1d(psT,dp2snoscale)
     dp2sInter = dp2sFunc(ps)
+    dp2s = [item/(dp2sInter[11]) for item in dp2sInter]
     
-    actualPropagators.append(dp2sInter)
+    actualPropagators.append(dp2s)
     
-    coefficients = np.polynomial.legendre.legfit(psInterp,dp2sInter,maxDegreeOfLegFit).reshape(1,-1)
-    
-    X_scaled=scaler.transform(coefficients)
-    X_pcaTestActual=pca.transform(X_scaled) 
-    
-    NNinputs.append(X_pcaTestActual[0])
+    NNinputs.append(dp2s)
 
+# plt.figure()
+# plt.plot(psT,np.mean(meanProps,axis=0))
+# plt.plot(psT,np.std(meanProps,axis=0))
 
 NNinputs = pd.DataFrame(NNinputs)
 # print(NNinputs)
@@ -160,7 +136,6 @@ testloader = DataLoader(TensorDataset((torch.tensor(NNinputs.values).double()).t
 # print(testloader)
 
 
-# print("Len NN inputs:",len(NNinputs))
 # print(NNinputs[0])
 # print(propLists[-1])
 
@@ -174,19 +149,28 @@ with torch.no_grad():
     # D_test = next(iter(testloader))
     # print(D_test)
     for i in range(len(testloader)):
-        prediction = model.forward(next(iterloader)[0])
+        propData = next(iterloader)[0] 
+        
+        # if i == 1:
+        #     print(propData)
+        #     propData = 2* propData
+        #     print(propData)
+        prediction = model.forward(propData)
         # print("output:",prediction)
         predicData = prediction.to("cpu").numpy()
-        # print("output:",predicData)
+        # print(predicData)
+            
         predicList.append(predicData)
-    
-predicData = predicList[:][0][:]
-# print(predicList[-1])
+        
+            
 
+print(len(predicList))
 predicData = []
 for i in range(len(predicList)):
     predicData.append(predicList[i][0])
 
+
+# print(predicData)
 
 # print(predicData[-1])
 
@@ -264,7 +248,7 @@ def reconstructProp(index):
     
     # rescaling = reconstructedPropSigma[0]*0.1
     # rescaling = reconstructedPropSigma[51]*16
-    rescaling = reconstructedPropSigma[12]
+    rescaling = reconstructedPropSigma[11]
     for i in range(len(ps)):
         reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
         
@@ -282,32 +266,44 @@ if getBestAndWorst:
     
     
     fullSortedList = []
+    # nbrlargemaes = 0
     for i in range(len(actualPropagators)):
         MAE = 0
             
         #MAE on propagator
         reconProp = reconstructProp(i)
         combListProp = zip(actualPropagators[i],reconProp)
-        scale = abs(max(actualPropagators[i]))
+        scale = abs(max(actualPropagators[i],key=abs))
         for orig, recon in combListProp:
-            MAE += abs(orig-recon)/scale
+            MAE += abs(orig-recon)**2/scale
     
-        # For 100k (8x1000):
+        # For 10k (6x800)
+        # if MAE > maxMAE and i != 1229: 
         if MAE > maxMAE: 
             maxMAE = MAE
             maxMAEindex = i
         if MAE < minMAE:
             minMAE = MAE
             minMAEindex = i
-        
+            
+        # if MAE > 1000:
+        #      nbrlargemaes += 1
+        #      print(MAE)
+            
+        #skip if prediction is outlier
+        # if abs(max(predicData[i][:nbrWs])) < 20:
         fullSortedList.append((MAE,i))
     
+    # print(len(actualPropagators))
+    print("len sortedlist:",len(fullSortedList))
     fullSortedList.sort()
     
     print("Sorted all rhos")
     
     print("Min. MAE:",minMAE)
     print("Max. MAE:",maxMAE)
+    
+    # print(fullSortedList)
 
     # print("best:",minMAEindex)
     percentile25th = fullSortedList[round(len(fullSortedList)/4)][1]
@@ -321,7 +317,9 @@ if getBestAndWorst:
           [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex])
     
     #2nd best instead of 25th percentile:
-    percentile25th = fullSortedList[1][1]
+    # percentile25th = fullSortedList[1][1]
+    
+    # percentile25th = fullSortedList[round(len(fullSortedList)/8)][1]
     # percentile50th = fullSortedList[2][1]
         
     
@@ -330,15 +328,18 @@ if getBestAndWorst:
     # percentile75th = 8654
             
     
-    #Find closest training propagator to i = 1462
+    #Find closest training propagator to a given monte carlo prop
     # MAEclosest = 10000
     # MAEcloseIndex = 0
+    # indexOfComparison = 1
     
     # for i in range(len(alldata)):
     #     MAEc = 0
+    #     scale = abs(max(alldata[i]))
     #     for j in range(len(alldata[i])):
     #         #TODO: debug
-    #         MAEc += abs(alldata[i][j] - actualPropagators[i][j])
+    #         MAEc += abs(alldata[i][j] - actualPropagators[indexOfComparison][j])
+    #     MAEc = MAEc/scale
     #     if MAEc < MAEclosest:
     #         MAEcloseIndex = i
     #         MAEclosest = MAEc
@@ -364,7 +365,7 @@ if getBestAndWorst:
     indices = [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex]
     
     propaxes = [ax11,ax21,ax31,ax41,ax51]
-    ps = np.linspace(0.01,7.7,100)
+    ps = np.linspace(pstart,pend,nbrPoints)
     for i in range(len(propaxes)):
         # if i == 0:
         #     propaxes[i].plot(ps,alldata[MAEcloseIndex],label="Most similar training propagator")

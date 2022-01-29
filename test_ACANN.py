@@ -13,10 +13,11 @@ import matplotlib.pyplot as plt
 import inputParameters as config
 import pandas as pd
 from matplotlib.legend_handler import HandlerTuple
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 
 #Load input parameters from inputParameters.py
-inputSize = config.nbrOfPCAcomponents
 nbrWs = config.nbrWs
 nbrOfPoles = config.nbrOfPoles
 sizeOfTraining = config.trainingPoints 
@@ -25,7 +26,9 @@ outputSize = nbrWs + (4 * nbrOfPoles) + 1
 pstart = config.pstart
 pend = config.pend
 nbrPoints = config.nbrPoints
+inputSize = nbrPoints
 print("NN input size {}, output size {} plus {} poles and sigma".format(inputSize,outputSize-4*nbrOfPoles-1,nbrOfPoles))
+
 
 #Load the saved NN model (made in train_ACANN.py)
 
@@ -33,8 +36,10 @@ saved = "savedNNmodel.pth"
 # saved = "savedNNmodel8x1000,0.190,100k.pth"
 
 #Note: Make sure the dimensions are the same
-# model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
-model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,8*[300],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,4*[400],drop_p=0.05).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
@@ -53,7 +58,7 @@ testloadList = list(testloader)
 rhovaluesList = testloadList[0][1].to("cpu").numpy()
 print(len(rhovaluesList),"testing points")
 
-prop_data = pd.read_csv(path+'DTestRaw.csv',header=None,nrows=sizeOfValidation)
+prop_data = pd.read_csv(path+'DTest.csv',header=None,nrows=sizeOfValidation)
 propList = prop_data.values.tolist()
 print(len(propList),"propagators")
 
@@ -75,102 +80,6 @@ with torch.no_grad():
 ps = np.linspace(pstart,pend,nbrPoints)
 ws = np.linspace(0.01,10,nbrWs)
 
-_norm_pdf_C = np.sqrt(2*np.pi)
-zlim = 37
-
-#Calculates the pdf of a normal distribution
-def custompdf(w,mean,std):
-    z = (w-mean)/std
-    if z < zlim and z > -zlim:
-        return np.exp(-(w-mean)**2/(2.0*(std**2))) / (_norm_pdf_C*std)
-    else:
-        return 0
-
-    
-plot = False
-if plot:
-    #Plot the density function
-    #currently only the last test sample
-    amountOfTests = 5
-    for i in range(0,round(len(rhovaluesList)),round(len(rhovaluesList)/amountOfTests)):
-        
-        fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)
-        fig.suptitle("Reconstructed spectral density functions")
-        step = int(sizeOfValidation/sizeOfValidation)
-        
-        print("\ni =",i,"and",i+step,"out of",len(rhovaluesList))
-        print("Params:",paramsList[4::8][i])
-        
-        ax2.plot(ws,rhovaluesList[i][:nbrWs],label="Original")
-        ax2.plot(ws,predicData[i][:nbrWs],label="Reconstructed")
-        ax2.legend()
-        ax2.set_xlabel("ω²")
-        ax2.set_ylabel("ρ(ω)")
-        
-        print("Params:",paramsList[4::8][i+step])
-        
-        ax4.plot(ws,rhovaluesList[i+step][:nbrWs],label="Original")
-        ax4.plot(ws,predicData[i+step][:nbrWs],label="Reconstructed")
-        ax4.legend()
-        ax4.set_xlabel("ω²")
-        ax4.set_ylabel("ρ(ω)")
-        
-        ax1.plot(ps,propList[i],label="Propagator")
-        # ax3.plot(ps,predicData[i+2*step][:nbrWs],label="Reconstructed")
-        ax1.legend()
-        ax1.set_xlabel("p²")
-        ax1.set_ylabel("D(p²)")
-        
-        ax3.plot(ps,propList[i+step],label="Propagator")
-        # ax4.plot(ws,predicData[i+3*step][:nbrWs],label="Reconstructed")
-        ax3.legend()
-        ax3.set_xlabel("p²")
-        ax3.set_ylabel("D(p²)")
-    
-        # plt.title("Reconstructed spectral density function")
-    
-    #Plot the poles
-    #currently only the ith test sample
-    plotPoles = True
-    if plotPoles:
-        polemarkers = ["^","o","*"]
-        for i in range(0,round(len(rhovaluesList)),round(len(rhovaluesList)/amountOfTests)):
-            plt.figure()
-            for j in range(nbrOfPoles):
-                #Only plot the poles
-                aj = predicData[i][nbrWs + 4*j]
-                bj = predicData[i][nbrWs + 4*j + 1]
-                cj = predicData[i][nbrWs + 4*j + 2]
-                dj = predicData[i][nbrWs + 4*j + 3]
-                ajOrig = rhovaluesList[i][nbrWs + 4*j]
-                bjOrig = rhovaluesList[i][nbrWs + 4*j + 1]
-                cjOrig = rhovaluesList[i][nbrWs + 4*j + 2]
-                djOrig = rhovaluesList[i][nbrWs + 4*j + 3]
-                
-                # plt.plot(ajOrig,bjOrig,"o",color="green",markersize=10)
-                # plt.plot(aj,bj,"o",color="lawngreen",markersize=10)
-                
-                plt.plot(cjOrig,djOrig,polemarkers[j],color="blue",markersize=15)
-                plt.plot(cj,dj,polemarkers[j],color="cyan",markersize=15)
-                
-                
-            #Again for correct legend:
-            plt.plot(cjOrig,djOrig,polemarkers[j],color="blue",label="Original poles",markersize=15)
-            plt.plot(cj,dj,polemarkers[j],color="cyan",label="Reconstructed poles",markersize=15)
-            
-            # plt.plot(ajOrig,bjOrig,"o",color="green",label="Original residues",markersize=10)
-            # plt.plot(aj,bj,"o",color="lawngreen",label="Reconstructed residues",markersize=10)
-            
-            plt.xlim(-6,6)
-            plt.ylim(-6,6)
-            plt.legend()
-            plt.grid()
-            plt.xlabel("Re(q)")
-            plt.ylabel("Im(q)")
-            plt.title("Reconstructed complex poles and residues")
-    
-    
-    
 
 
     
@@ -216,8 +125,8 @@ def plotResiduesForIndex(i,ax):
         # ax.plot([ajOrig,aj],[bjOrig,bj],color="green")
         
     
-    ax.set_xlim([-1.5,1.5])
-    ax.set_ylim([0,1.2])
+    # ax.set_xlim([-1.5,1.5])
+    # ax.set_ylim([0,1.2])
     ax.grid()
     ax.set_xlabel("Re(R)")
     ax.set_ylabel("Im(R)")
@@ -253,18 +162,16 @@ def reconstructProp(index):
         integral = integrate.simpson(spectrFunc,x=ws[wscutoff:])
         prop = integral + poles(p**2,3, predicData[index][nbrWs:nbrWs+12])
         reconstructedPropSigma.append(prop)
-        
     
-    # rescaling = reconstructedPropSigma[51]*16
     rescaling = reconstructedPropSigma[12]
     for i in range(len(ps)):
         reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
     return reconstructedPropSigma
     
-    
+
 # plt.figure()
 # plt.plot(ps,propList[-1])
-    
+nbrlargemaes = 0
 getBestAndWorst = True
 if getBestAndWorst:
     #Get the best and worst test cases:
@@ -279,21 +186,29 @@ if getBestAndWorst:
         
         
         #MAE on spectral function
-        # combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
-        # scale = abs(max(rhovaluesList[i][:nbrWs]))
-        # for orig, recon in combList:
-        #     MAE += abs(orig-recon)/(scale)
+        combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
+        scale = abs(max(rhovaluesList[i][:nbrWs],key=abs))
+        for orig, recon in combList:
+            MAE += abs(orig-recon)**2/(scale)
+        
+        
+        """
+        To test: add artificial noise to training data
+                 remove spec functions with max(abs()) < 0.03
+        """
+        
             
         #MAE on all values
-        combListAll = zip(rhovaluesList[i],predicData[i])
-        scale = abs(max(rhovaluesList[i]))
-        for orig, recon in combListAll:
-            MAE += abs(orig-recon)/(scale)
+        # combListAll = zip(rhovaluesList[i],predicData[i])
+        # scale = abs(max(rhovaluesList[i]))
+        # for orig, recon in combListAll:
+        #     MAE += (orig-recon)**2/(scale)
+        
             
         # More weight to poles
-        # combList = zip(rhovaluesList[i][nbrWs:],predicData[i][nbrWs:])
-        # for orig, recon in combList:
-        #     MAE += 100*abs(orig-recon)
+        combList = zip(rhovaluesList[i][nbrWs:],predicData[i][nbrWs:])
+        for orig, recon in combList:
+            MAE += abs(orig-recon)**2
             
         #MAE on propagator
         # reconProp = reconstructProp(i)
@@ -302,14 +217,21 @@ if getBestAndWorst:
         # for orig, recon in combListProp:
         #     MAE += abs(orig-recon)/scale
             
-    
+        if MAE > 1000:
+            nbrlargemaes += 1
+            # print(MAE)
+            # print(i)
         # For 100k (8x1000):
             # and i != 17348 and i != 16195 and i != 7286 and i != 17312
             # and i != 3012
-        if MAE > maxMAE: 
+            #,4241,4686,24,3008
+        blacklist = []
+        # blacklist = [5364]
+        # blacklist = [88,255,519,955,1023,1770,2186,2251,3097]
+        if MAE > maxMAE and i not in blacklist: 
             maxMAE = MAE
             maxMAEindex = i
-        if MAE < minMAE:
+        if MAE < minMAE and i not in blacklist:
             minMAE = MAE
             minMAEindex = i
         
@@ -318,6 +240,8 @@ if getBestAndWorst:
     fullSortedList.sort()
     
     print("Sorted all rhos")
+    
+    print(nbrlargemaes,"number of large maes")
     
     
     """
@@ -439,6 +363,7 @@ if getBestAndWorst:
         propaxes[i].plot(ps,reconstructProp(indices[i]),"--",label="Reconstructed propagator",color="red")
         propaxes[i].set_xlabel("p")
         propaxes[i].set_ylabel("D(p²)")
+        # propaxes[i].set_xscale("log")
             
     rhoaxes = [ax12,ax22,ax32,ax42,ax52]
     for i in range(len(rhoaxes)):

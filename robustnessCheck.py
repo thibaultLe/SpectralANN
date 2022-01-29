@@ -16,11 +16,13 @@ Created on Thu Sep  2 17:54:33 2021
 # indices = [2608, 4750, 14605, 6786, 4920]
 # indices =  [41, 1453, 1552, 1322, 1232]
 
-#15/10
-indices = [1214, 440, 519, 563, 641]
+
+# indices = [4241, 1499, 4321, 3744, 1755]
+# indices = [2944, 341, 2332, 2048, 1558]
+indices =[366, 61, 189, 269, 730]
 
 nbrOfSamples = 100
-noiseSize = 1e-4
+noiseSize = 1e-2
 
 
 from Database import Database
@@ -28,21 +30,18 @@ from torch.utils.data import DataLoader
 import inputParameters as config
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 import pandas as pd
 from matplotlib.legend_handler import HandlerTuple
 
 np.random.seed(64)
 
 #Load input parameters from inputParameters.py
-maxDegreeOfLegFit = config.maxDegreeOfLegFit
-nbrOfPCAcomponents = config.nbrOfPCAcomponents
 sizeOfTraining = config.trainingPoints 
 sizeOfValidation = config.validationPoints
 pstart = config.pstart
 pend = config.pend
 nbrPoints = config.nbrPoints
+
 
 path = "C:/Users/Thibault/Documents/Universiteit/\
 Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
@@ -67,36 +66,9 @@ alldataTest = alldatatensorsTest[0][0].to("cpu").numpy()
 
 print(len(alldata),"training points")
 
-psForFit = np.linspace(-1,1,nbrPoints)
-
-maxdegree = maxDegreeOfLegFit
-
-#Legendre fit to all propagators in training set, keeps coefficients
-coefficientsList = []
-for i in range(len(alldata)):
-    coefficientsList.append(np.polynomial.legendre.legfit(psForFit,alldata[i],maxdegree))
-
-
-x = coefficientsList
-
-#Normalise the attributes
-scaler=StandardScaler()#instantiate
-scaler.fit(x) # compute the mean and standard which will be used in the next command
-X_scaled=scaler.transform(x)
-
-pca=PCA(n_components=nbrOfPCAcomponents) 
-pca.fit(X_scaled) 
-X_pca=pca.transform(X_scaled) 
-
 
 path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
   
-
-
-
-print("Data conversion to PCA components succesfull.")
-
-
 
 """
 ########################
@@ -112,7 +84,6 @@ import numpy as np
 import inputParameters as config
 
 #Load input parameters from inputParameters.py
-inputSize = config.nbrOfPCAcomponents
 nbrWs = config.nbrWs
 nbrOfPoles = config.nbrOfPoles
 sizeOfTraining = config.trainingPoints 
@@ -121,6 +92,8 @@ outputSize = nbrWs + (4 * nbrOfPoles) + 1
 pstart = config.pstart
 pend = config.pend
 nbrPoints = config.nbrPoints
+
+inputSize = nbrPoints
 print("NN input size {}, output size {} plus {} poles".format(inputSize,outputSize-4*nbrOfPoles,nbrOfPoles))
 
 #Load the saved NN model (made in train_ACANN.py)
@@ -132,8 +105,9 @@ print("NN input size {}, output size {} plus {} poles".format(inputSize,outputSi
 saved = "savedNNmodel.pth"
 
 #Note: Make sure the dimensions are the same
-# model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
-model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
+# model = ACANN(inputSize,outputSize,4*[400],drop_p=0.05).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
@@ -142,7 +116,7 @@ model.eval()
 #Load test data
 path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
 test_data = Database(csv_target= path + "rhoTest.csv", \
-                     csv_input= path + "DTest.csv",nb_data=sizeOfValidation).get_loader()
+                     csv_input= path + "DTestRaw.csv",nb_data=sizeOfValidation).get_loader()
 testloader = DataLoader(test_data,batch_size=sizeOfValidation)
 
 testloadList = list(testloader)
@@ -167,39 +141,36 @@ ws = np.linspace(0.01,10,nbrWs)
 def getMeanAndStdReconstruction(index):
     noisyPropsPerIndex = []
     for j in range(nbrOfSamples):
-        noise = np.random.normal(0,noiseSize,nbrPoints)
-        noisyPropsPerIndex.append(alldataTest[index] + noise)
+        noise = np.random.normal(1,noiseSize,nbrPoints)
+        noisyPropsPerIndex.append(alldataTest[index] * noise)
         
-    
-    coefficientsListPerIndex = []
-    for j in range(nbrOfSamples):
-        coefficientsListPerIndex.append(np.polynomial.legendre.legfit(psForFit,noisyPropsPerIndex[j],maxdegree))
-    
-    #Normalise the attributes
-    X_scaled=scaler.transform(coefficientsListPerIndex)
-    X_pcaTest=pca.transform(X_scaled) 
     
     NNinputsTensor = []
     for j in range(nbrOfSamples):
-        NNinputsTensor.append(X_pcaTest[j])
+        NNinputsTensor.append(noisyPropsPerIndex[j])
         
-    NNinputsTensor = torch.DoubleTensor(NNinputsTensor).cuda()
+    NNinputsTensor = torch.DoubleTensor(np.array(NNinputsTensor)).cuda()
         
     #Use NN to predict
     with torch.no_grad():
         prediction = model.forward(NNinputsTensor)
         predicData = prediction.to("cpu").numpy()
+    
+    filteredPredicData = []
+    for j in range(nbrOfSamples):
+        if max(predicData[j][:nbrWs]) < 10:
+            filteredPredicData.append(predicData[j])
         
     poles = []
-    for j in range(nbrOfSamples):
-        poles.append(predicData[j][nbrWs:])
+    for j in range(len(filteredPredicData)):
+        poles.append(filteredPredicData[j][nbrWs:])
     
-    means = np.mean(predicData,axis=0)[:nbrWs]
-    stddevs = np.std(predicData,axis=0)[:nbrWs]
+    means = np.mean(filteredPredicData,axis=0)[:nbrWs]
+    stddevs = np.std(filteredPredicData,axis=0)[:nbrWs]
     
     props = []
-    for j in range(nbrOfSamples):
-        props.append(reconstructProp(predicData[j]))
+    for j in range(len(filteredPredicData)):
+        props.append(reconstructProp(filteredPredicData[j]))
     
     propmeans = np.mean(props,axis=0)
     propstddevs = np.std(props,axis=0)
@@ -236,8 +207,8 @@ def reconstructProp(reconstruction):
         prop = integral + poles(p**2,3, reconstruction[nbrWs:nbrWs+12])
         reconstructedPropSigma.append(prop)
     
-    rescaling = reconstructedPropSigma[51]*16
-    # rescaling = reconstructedPropSigma[12]
+    # rescaling = reconstructedPropSigma[51]*16
+    rescaling = reconstructedPropSigma[11]
     for i in range(len(ps)):
         reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
     return reconstructedPropSigma
@@ -259,8 +230,9 @@ for i in range(len(indices)):
     propaxes[i].plot(ps,propmeans,"--",label="Mean reconstruction",color="red")
     propaxes[i].fill_between(ps,propmeans-propstddevs,propmeans+propstddevs,alpha=0.2, facecolor="red",
                     label='Standard deviation')
-    propaxes[i].set_xlabel("p²")
+    propaxes[i].set_xlabel("p")
     propaxes[i].set_ylabel("D(p²)")
+    # propaxes[i].set_xscale('log')
     
     #Plot spectral function:
     spectralaxes[i].set_xlabel("ω²")
@@ -273,7 +245,7 @@ for i in range(len(indices)):
     
     #Plot poles:
     aksA,bksA,cksA,dksA = [], [], [], []
-    for j in range(nbrOfSamples):
+    for j in range(len(polesAndSigma)):
         aks,bks,cks,dks = [], [], [], []
         for k in range(3):
             aks.append(polesAndSigma[j][4*k])
@@ -331,14 +303,14 @@ for i in range(len(indices)):
         # hull = ConvexHull(points)
         # polesaxes[i].fill(points[hull.vertices,0],points[hull.vertices,1],'red',alpha=0.4)
         
-    # resaxes[i].set_xlim([-6,6])
-    # resaxes[i].set_ylim([0,6])
+    resaxes[i].set_xlim([-1.5,1.5])
+    resaxes[i].set_ylim([0,1.2])
     resaxes[i].grid()
     resaxes[i].set_xlabel("Re(R)")
     resaxes[i].set_ylabel("Im(R)")
     
-    # polesaxes[i].set_xlim([-6,6])
-    # polesaxes[i].set_ylim([0,6])
+    polesaxes[i].set_xlim([0.1,0.4])
+    polesaxes[i].set_ylim([0.2,0.7])
     polesaxes[i].grid()
     polesaxes[i].set_xlabel("Re(q)")
     polesaxes[i].set_ylabel("Im(q)")

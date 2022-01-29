@@ -6,14 +6,6 @@ Created on Mon Jul  5 12:18:08 2021
 """
 
 
-"""
-#################################################
-Todo for next iteration (1/10/2021):
-    -Add extra constraint on spectral function and poles
-        Check how many props are removed/kept
-#################################################
-"""
-
 import numpy as np
 from scipy import integrate
 import itertools
@@ -22,15 +14,11 @@ import os
 from functools import lru_cache
 import time
 import random
-import matplotlib.pyplot as plt
 
 np.seterr('raise')
 cacheSize = 2048
 random.seed(64)
 
-#w,Z,m2,lam2 = floats
-#N1 = int
-#ABCs = [[A1,B1,C1],[A2,B2,C2]...[AN1,BN1,CN1]] list of list of floats
 @lru_cache(maxsize=cacheSize)
 def rho1(w2,Z,m2,lam2,N1,ABCs):
     gamma = 13/22
@@ -46,10 +34,10 @@ def rho1(w2,Z,m2,lam2,N1,ABCs):
     return mult * ksum
 
 
-#Calculates the pdf of a normal distribution
+#Approximates the pdf of a normal distribution (exact but cuts off at z=15)
 #Avoids huge exponents by cutting off the distribution after zlim
 def custompdf(w,mean,std):
-    zlim = 15
+    zlim = 7
     z = (w-mean)/std
     if z < zlim and z > -zlim:
         return np.exp(-(w-mean)**2/(std))
@@ -65,17 +53,13 @@ def rho2(w2,N2,gabl,N3,gabi):
     lsum = 0
     #Sum of normal distributions
     #If w2 > ~5.2: underflow in exp
-    for l in range(N2):
-        # lsum += np.sqrt(2*np.pi) * gabl[l][0] * norm.pdf(w2,loc=gabl[l][1],scale=gabl[l][2]/2)
-        # lsum += gabl[l][0] * (np.exp(-((w2 - gabl[l][1])**2)/gabl[l][2]))        
+    for l in range(N2):       
         lsum += gabl[l][0] * custompdf(w2,gabl[l][1],gabl[l][2])
 
     
     isum = 0
     #Sum of derivatives of normal distributions
-    for i in range(N3):        
-        # isum += np.sqrt(2*np.pi) * gabi[i][0] * norm.pdf(w2,loc=gabi[i][1],scale=gabi[i][2]/2)
-        # isum += gabi[i][0] * w2 * (np.exp(-((w2 - gabi[i][1])**2)/gabi[i][2]))        
+    for i in range(N3):           
         isum += gabi[i][0] * w2 * custompdf(w2,gabi[i][1],gabi[i][2])
 
         
@@ -124,9 +108,13 @@ def calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,sigma,p):
 def constraint15(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,abcds):
     res = integrate.quad(rho,0.01+sigma,10,args=(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi))[0]
     
+    jsum = 0
     for j in range(N):
-        res += 2 * abcds[j][0]
+        jsum += 2 * abcds[j][0]
     
+    # print(round(res))
+    
+    res += jsum
     
     if res < 0.5 and res > -0.5:
         return True
@@ -135,11 +123,8 @@ def constraint15(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,abcds):
 
 #Returns true if the constraint is satisfied
 @lru_cache(maxsize=cacheSize)
-def derivativeConstraint(dp0,dp1,rho0,rho1,abcds,N):
-    rhos0 = rho(ws[0],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
-    rhos1 = rho(ws[1],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
-    
-    derivativeRho = (rhos1 - rhos0)/(ws[1]-ws[0])
+def derivativeConstraint(dp0,dp1,rho0,rho1,abcds,N):    
+    derivativeRho = (rho1 - rho0)/(ws[1]-ws[0])
     derivativeProp = (dp1 - dp0)/(ps[1]**2-ps[0]**2)
     
     # print((ps[1]**2-ps[0]**2),(ps[1]-ps[0]))
@@ -155,25 +140,31 @@ def derivativeConstraint(dp0,dp1,rho0,rho1,abcds,N):
         
     idealDerivative = -np.pi*derivativeRho - derivativePoles
     
-    # print(derivativeProp, idealDerivative)
     if derivativeProp < idealDerivative - 1 or \
         derivativeProp > idealDerivative + 1:
         return False
     
-    # print(derivativeProp, idealDerivative)
     return True
         
         
 
 if __name__ == "__main__":
     
-    pstart = 0.01
-    pend = 7.77
+    #10:40 hours for 100k
+    #4 hours for 30k
+    
+    #Desired training data size:
+    desiredDataSize = 10000
+    
+    
+    pstart = 0
+    pend = 8.25
+    #8.25 -> p = 1 is exactly in ps
+    
     nbrPoints = 100
-    # ps = np.geomspace(pstart,pend,nbrPoints)
     ps = np.linspace(pstart,pend,nbrPoints)
-    #Lin space for density function
     nbrWs = 200
+    #ws = w**2s
     ws = np.linspace(0.01,10,nbrWs)
     
     
@@ -183,41 +174,31 @@ if __name__ == "__main__":
     #######################################
     """
     #Sigma in [0,1]
-    sigmas = np.linspace(0,1,2)
+    sigmas = np.linspace(0,1,4)
     #Z in [1,10]
     # Z = 1
     Zs = np.linspace(1,10,1)
     #m2 in [0,5]
     # m2 = 3
-    m2s = np.linspace(2,5,3)
+    m2s = np.linspace(2,5,4)
     #lam2 in ]0,5] 
     # lam2 = 2
-    lam2s = np.linspace(1,4,3)
-    #Extra constraint: w^2 + m^2 / lam2 > 1
-    #Extra constraint: lam2 > 0
-    #Extra constraint: Beta L/i > 0
+    lam2s = np.linspace(1,4,4)
     
     #N1,N2,N3 in [1,5] (int)
-    # N1s = [1,3]
+    #Nis = [1,2,3]
     Ns  = [i for i in range(1,4)]
     N1s = [i for i in range(1,4)]
     N2s = [i for i in range(1,4)]
     N3s = [i for i in range(1,4)]
     
-    def checkSingularity(w,B,C):
-        w2 = w**2
+    def checkSingularity(w2,B,C):
         if B*w2 + C**2 -2*C*w2 + w2**2 <= 10**(-7):
             return True
         else:
             return False
     
-    # A,B,Cks in [-5,5]     
-    # B = 0 caused large propagator in:
-    # 5.0 1.0 0.5 ((-5, 5, 2, -2),) ((-3, 0, 3),) ((-5, 5, 1),) ((-2, 3, 5),)
-    # C = 0 caused large propagator in: 
-    # 5.0 5.0 4.5 ((-5, 5, 2, -2),) ((-3, 1, 0),) ((-2, 5, 5),) ((-2, 3, 5),)
-    # T = list(itertools.product(*[[-3,0,3],[-3,1,3],[-3,1,3]]))
-    T = list(itertools.product(*[[-0.5,-0.2,0.2,0.5],[-5,-2,2,5],[-5,-2,2,5]]))
+    T = list(itertools.product(*[[-0.5,-0.16,0.16,0.5],[-5,-1.6,1.6,5],[-5,-1.6,1.6,5]]))
     noSingularitiesT = []
     for ABC in T:
         singularityFound = False
@@ -235,35 +216,33 @@ if __name__ == "__main__":
         ABCs = list(itertools.combinations_with_replacement(noSingularitiesT,N1))
         sampled_ABCs = []
         for ABC in ABCs:
-            if random.random() < 0.002:
+            if random.random() < 0.0015:
                 sampled_ABCs.append(ABC)
         ABCNs.append(sampled_ABCs)
         
     
     # #alfa,beta in [0,5]
     # #gamma in [-5,5]
-    # gaml = N2 * [1]
-    # alfal = N2 * [1]
-    # betal = N2 * [1]
     # T = list(itertools.product(*[[-5,-2,2,5],[1,3,5],[1,3,5]]))
     # T = list(itertools.product(*[[-5,1,5],[1,3,5],[1,3,5]]))
-    T = list(itertools.product(*[[-0.1,0.1],[1,5],[1,5]]))
+    T = list(itertools.product(*[[-0.5,-0.16,0.16,0.5],[1,2.3,3.6,5],[1,2.3,3.6,5]]))
     gablNs = []
     for N2 in N2s:
         gabls = list(itertools.combinations_with_replacement(T,N2))
-        gablNs.append(gabls)
+        sampled_gabls = []
+        for gab in gabls:
+            if random.random() < 0.0005:
+                sampled_gabls.append(gab)
+        gablNs.append(sampled_gabls)
     
-    # gami = N3 * [1]
-    # alfai = N3 * [1]
-    # betai = N3 * [1]
     # gabiNs = gablNs.copy()
-    T = list(itertools.product(*[[-0.1,0.1],[1,3,5],[1,3,5]]))
+    T = list(itertools.product(*[[-0.5,-0.16,0.16,0.5],[1,2.3,3.6,5],[1,2.3,3.6,5]]))
     gabiNs = []
     for N3 in N3s:
         gabis = list(itertools.combinations_with_replacement(T,N3))
         sampled_gabis = []
         for gab in gabis:
-            if random.random() < 0.2:
+            if random.random() < 0.0009:
                 sampled_gabis.append(gab)
         gabiNs.append(sampled_gabis)
     
@@ -276,9 +255,9 @@ if __name__ == "__main__":
     #                   dj ~ 0.3 to 0.6
     
     # #a,b,c,d in [-5,5] 
-    # T = list(itertools.product([-3,3],repeat=4))
     # T = list(itertools.product(*[[-3,3],[1,5],[-3,3],[1,5]]))
-    T = list(itertools.product(*[[-1,0,1],[0.1,0.55,1],[0.15,0.25,0.35],[0.3,0.45,0.6]]))
+    T = list(itertools.product(*[[-1,-0.33,0.33,1],[0,0.33,0.66,1], \
+                     [0.2,0.25,0.3,0.35],[0.3,0.45,0.6,0.75]]))
     abcdNs = []
     for N in Ns:
         abcds = list(itertools.combinations_with_replacement(T,N))
@@ -286,29 +265,18 @@ if __name__ == "__main__":
         # print("poles:",N,"len:",len(abcds))
         sampled_abcds = []
         for abcd in abcds:
-            if random.random() < 0.0005:
+            if random.random() < 0.000015:
                 sampled_abcds.append(abcd)
         
-        
-        # print(abcds)
-        # print(sortedByFirst[-1])
         abcdNs.append(sampled_abcds)
         # abcdNs.append(abcds)
         
-        
-    
-    #Cartesian products become very large, very quickly...
-    #50 per second, 200000 total = 1 hour data generation
     
     
     #Iterator over all possible combinations of parameters
-    #Currently only 1 pole,ABC,gami and gaml
-    """
-    TODO: Check physicality of spectral density function/propagator
-    """
-    #                    3             2    5       2    3
     names = ["sig","Z","m2","lam2","abcd","ABC","gabl","gabi"]
-    sub = [sigmas,Zs,m2s,lam2s,abcdNs[2],ABCNs[2],gablNs[1],gabiNs[1]]
+    sub = [sigmas,Zs,m2s,lam2s,abcdNs[2],ABCNs[2],gablNs[2],gabiNs[2]]
+    # 3 combinations of poles,ABCs gabls/gabis
     
     
     totalSize = 1
@@ -365,10 +333,6 @@ if __name__ == "__main__":
     counterConstraint15True = 0
     counterConstraint15False = 0
     
-    #10:40 hours for 100k
-    #4 hours for 30k
-    
-    desiredDataSize = 30000
     print("Desired training data size:",desiredDataSize)
     print("Percentage of training set selected:",round(100*desiredDataSize/totalSize,4),"%")
     
@@ -408,7 +372,7 @@ if __name__ == "__main__":
     
     for item in iterator:
         #Random sampling over the resulting parameter combinations
-        if random.random() <= 550*desiredDataSize/totalSize:
+        if random.random() <= 2.15*800*desiredDataSize/totalSize:
             #                 ^ multiplicity factor to account for unlawful combinations
             
             sigma = item[0]
@@ -429,9 +393,6 @@ if __name__ == "__main__":
             
             #Calculate propagator:
             
-            #Add normal noise to the values:
-            # noiseLevel = 0
-            
             if not constraint15(Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis,abcds):
                 counterConstraint15False += 1
                 continue
@@ -447,7 +408,6 @@ if __name__ == "__main__":
                 prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[i]) / rescaling
                 # prop = calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabls,N3,gabis,sigma,ps[i])
                 
-                # dps.append(prop + np.random.normal(scale=noiseLevel))
                 dps.append(prop)
                 
                 #Check for negative prop
@@ -457,8 +417,8 @@ if __name__ == "__main__":
                 
                 #Check derivative equation
                 if i == 1:
-                    rhos0 = rho(ws[0],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
-                    rhos1 = rho(ws[1],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)
+                    rhos0 = rho(ws[0],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)/rescaling
+                    rhos1 = rho(ws[1],Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)/rescaling
                     dp0 = dps[0] 
                     dp1 = dps[1]
                     
@@ -481,14 +441,19 @@ if __name__ == "__main__":
             #Calculate density function (already in cache so should be fast)
             rhos = []
             for w in ws:
-                rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis))
+                rhos.append(rho(w,Z,m2,lam2,N1,ABCs,N2,gabls,N3,gabis)/rescaling)
             
         
             
             #Add poles to the list: (1 value at a time, add zeroes if not enough poles)
             for polecouple in abcds:
-                for poleval in polecouple:
-                    rhos.append(poleval)
+                for i in range(len(polecouple)):
+                    #rescale residues, not poles
+                    if i < 2:
+                        rhos.append(polecouple[i]/rescaling)
+                    else:
+                        rhos.append(polecouple[i])
+                    
             nbrOfMissingPoles = 3 - len(abcds)
             missingPoles = 4 * nbrOfMissingPoles * [0]
             for missingPole in missingPoles:
@@ -541,7 +506,6 @@ if __name__ == "__main__":
                 paramsdf.to_csv(params_csv,index=False,header=False,mode='a')
                 
                 
-                
                 #Reset templists
                 propTempList = []
                 rhoTempList = []
@@ -557,9 +521,9 @@ if __name__ == "__main__":
                                  suffix = 'Complete,{} mins remaining, {} per sec'.format(minsRemaining,pointsPerSecond), length = 30)
                             
                 #Stop when desired data size is reached
-                # if counter*3/4 >= desiredDataSize:
-                #     print("early stop")
-                #     break
+                if counter*3/4 >= desiredDataSize:
+                    print("early stop")
+                    break
                 start = time.time()
                 
 
@@ -579,13 +543,9 @@ if __name__ == "__main__":
     print("{} testing points".format(nbrOfValidationPoints))
         
     nbrOfPoles = 3
-    maxDegreeOfLegFit = 30
-    nbrOfPCAcomponents = 15
-    #Write parameters to file:
+    #Write input parameters to file:
     params = open("inputParameters.py","w")
     params.write("nbrOfPoles = {}\n".format(nbrOfPoles))
-    params.write("maxDegreeOfLegFit = {}\n".format(maxDegreeOfLegFit))
-    params.write("nbrOfPCAcomponents = {}\n".format(nbrOfPCAcomponents))
     params.write("trainingPoints = {}\n".format(nbrOfTrainingPoints))
     params.write("validationPoints = {}\n".format(nbrOfValidationPoints))
     params.write("pstart = {}\n".format(pstart))
@@ -595,27 +555,4 @@ if __name__ == "__main__":
          
     params.close()
     
-    # print(dps)
-    # plt.plot(ps,dps,"o")
-    # plt.figure()
-    # plt.plot(ws,rhos)
-    #     counter += 1
-    #     file.write(str(item))
-    # file.close()
     
-    # a = [Z,m2,ABCNs[1]]
-    # print(list(itertools.product(*a)))
-    # print(len(listOfAllParams))
-    
-    
-    # ps = np.linspace(0.01,5,200)
-    
-    # dpswithpoles = []
-    # for p in ps:
-    #     #Assume p's are p^2's
-    #     # dpswithpoles.append(integrate.quad(rhoint,0.01,5,p)[0] + poles(p))
-    #     dpswithpoles.append(calcPropagator(Z,m2,lam2,N,abcds,N1,ABCs,N2,gabl,N3,gabi,p))
-    
-
-
-
