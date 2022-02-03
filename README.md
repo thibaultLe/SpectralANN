@@ -6,7 +6,7 @@ Note: Update the "path" variable in most files to point to your current working 
 1) Run generatePropagators.py
 
    The datasets of training, validation and testing can be found under Datasets
-3) Run propagatorPCA.py
+3) Run propagatorNoise.py
 
    This converts the propagator data to the correct input format
 5) Run train_ACANN.py
