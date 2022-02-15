@@ -1,4 +1,4 @@
-# SpectralANN
+# SpectralANN: Neural network approach to reconstructing spectral functions and complex poles of confined particles
 The trained PyTorch neural network can be found under 'savedNNmodel.pth', which has a configuration of 6 hidden layers and 600 neurons per layer.
 
 Our generated datasets of training, validation and testing can be found under Datasets
