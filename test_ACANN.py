@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import inputParameters as config
 import pandas as pd
 from matplotlib.legend_handler import HandlerTuple
+from scipy import integrate
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
@@ -31,15 +32,10 @@ print("NN input size {}, output size {} plus {} poles and sigma".format(inputSiz
 
 
 #Load the saved NN model (made in train_ACANN.py)
-
 saved = "savedNNmodel.pth"
-# saved = "savedNNmodel8x1000,0.190,100k.pth"
 
 #Note: Make sure the dimensions are the same
-model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
-# model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
-# model = ACANN(inputSize,outputSize,8*[300],drop_p=0.05).double()
-# model = ACANN(inputSize,outputSize,4*[400],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[600],drop_p=0.1).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
@@ -52,8 +48,6 @@ test_data = Database(csv_target= path + "rhoTest.csv", \
 testloader = DataLoader(test_data,batch_size=sizeOfValidation)
 
 testloadList = list(testloader)
-# print("Test data:",testloadList)
-# print("Rho test:",testloadList[0][1])
 #Convert tensor to numpy array:
 rhovaluesList = testloadList[0][1].to("cpu").numpy()
 print(len(rhovaluesList),"testing points")
@@ -67,6 +61,7 @@ paramsList = params_data.values.tolist()
 
 print("Data Loaded")
 
+origProp = []
 #Use NN to predict
 with torch.no_grad():
     D_test,rho_test = next(iter(testloader))
@@ -75,11 +70,11 @@ with torch.no_grad():
     # print("output:",prediction)
     predicData = prediction.to("cpu").numpy()
     # print("output:",predicData)
+    origProp.append(D_test.to("cpu").numpy())
 
 #Evaluate output:
 ps = np.linspace(pstart,pend,nbrPoints)
 ws = np.linspace(0.01,10,nbrWs)
-
 
 
     
@@ -98,9 +93,8 @@ def plotPolesForIndex(i,ax):
         ax.plot(cj,dj,polemarkers[j],color="cyan",label="Reconstructed poles",markersize=msizes[j])
         
                 
-                
-    ax.set_xlim([0.1,0.4])
-    ax.set_ylim([0.2,0.7])
+    ax.set_xlim([0.15,0.4])
+    ax.set_ylim([0.2,0.8])
     ax.grid()
     ax.set_xlabel("Re(q)")
     ax.set_ylabel("Im(q)")
@@ -108,7 +102,6 @@ def plotPolesForIndex(i,ax):
 
 def plotResiduesForIndex(i,ax):
     resmarkers = ["o","^","*"]
-    # resmarkers = ["$1$","$2$","$3$"]
     msizes = [7,9,11]
     for j in range(nbrOfPoles):
         #Only plot the poles
@@ -121,19 +114,15 @@ def plotResiduesForIndex(i,ax):
             ax.plot(ajOrig,bjOrig,marker=resmarkers[j],color="green",label="Original residues",markersize=msizes[j])
         ax.plot(aj,bj,marker=resmarkers[j],color="lawngreen",label="Reconstructed residues",markersize=msizes[j])
         
-        #Draw lines in between:
-        # ax.plot([ajOrig,aj],[bjOrig,bj],color="green")
-        
     
-    # ax.set_xlim([-1.5,1.5])
-    # ax.set_ylim([0,1.2])
+    ax.set_xlim([-2,2])
+    ax.set_ylim([-0.2,1])
     ax.grid()
     ax.set_xlabel("Re(R)")
     ax.set_ylabel("Im(R)")
     
 #Reconstruct propagator from reconstructed spectral function and poles:
 def poles(p,N,poleList):
-    # print(poleList)
     jsum = 0
     for j in range(N):
         a = poleList[j*4]
@@ -147,11 +136,8 @@ def poles(p,N,poleList):
     return jsum
 
 def reconstructProp(index):
-    from scipy import integrate
     sigma = predicData[index][-1]
-    #If negative, -> 0
-    #If more than 1 -> 1
-    wscutoff = min(max(int(round(sigma/0.04995)),0),1)
+    wscutoff = min(range(len(ws)), key=lambda i: abs(ws[i]-sigma))
     
     reconstructedPropSigma = []
     for p in ps:
@@ -167,11 +153,59 @@ def reconstructProp(index):
     for i in range(len(ps)):
         reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
     return reconstructedPropSigma
+
+def constraint15(index):
+    sigma = predicData[index][-1]
+    wscutoff = min(range(len(ws)), key=lambda i: abs(ws[i]-sigma))
+    res = integrate.simpson(predicData[index][wscutoff:nbrWs],x=ws[wscutoff:])
+    
+    jsum = 0
+    for j in range(3):
+        jsum += 2 * predicData[index][nbrWs+j*4]
+    
+    res += jsum
+    
+    if res < 0.5 and res > -0.5:
+        return True
+    return False
+
+def derivativeconstraint(index): 
+    dp0 = origProp[0][index][0] 
+    dp1 = origProp[0][index][1]
+    rho0 = predicData[index][0]
+    rho1 = predicData[index][1]
+    derivativeRho = (rho1 - rho0)/(ws[1]-ws[0])
+    derivativeProp = (dp1 - dp0)/(ps[1]**2-ps[0]**2)
+    
+    derivativePoles = 0
+    for j in range(3):
+        a = predicData[index][nbrWs+j*4]
+        b = predicData[index][nbrWs+j*4+1]
+        c = predicData[index][nbrWs+j*4+2]
+        d = predicData[index][nbrWs+j*4+3]
+        #Alternate but equivalent formula:
+        derivativePoles += (-2*a*c**2 + 2*a*d**2 + 4*b*c*d)/((c**2 + d**2)**2)
+        
+    idealDerivative = -np.pi*derivativeRho - derivativePoles
+    
+    if derivativeProp < idealDerivative - 1 or \
+        derivativeProp > idealDerivative + 1:
+        return False
+    
+    return True
+
+def positivepropconstraint(index):
+    if min(reconstructProp(index)) < 0:
+        return False
+    return True
+
+
+def testConstraints(index):
+    if constraint15(index) and derivativeconstraint(index) and positivepropconstraint(index):
+        return True
+    return False
     
 
-# plt.figure()
-# plt.plot(ps,propList[-1])
-nbrlargemaes = 0
 getBestAndWorst = True
 if getBestAndWorst:
     #Get the best and worst test cases:
@@ -180,164 +214,80 @@ if getBestAndWorst:
     minMAEindex = 0
     minMAE = 100000
     
+    constraintsSatisfied1 = 0
+    constraintsSatisfied2 = 0
+    constraintsSatisfied3 = 0
+    constraintsSatisfiedAll = 0
+    
     fullSortedList = []    
     for i in range(len(rhovaluesList)):
         MAE = 0
         
+        combListAll = zip(rhovaluesList[i],predicData[i])
+        scale = max(abs(rhovaluesList[i]))
+        for orig, recon in combListAll:
+            MAE += abs(orig-recon)/scale
         
-        #MAE on spectral function
-        combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
-        scale = abs(max(rhovaluesList[i][:nbrWs],key=abs))
-        for orig, recon in combList:
-            MAE += abs(orig-recon)**2/(scale)
-        
-        
-        """
-        To test: add artificial noise to training data
-                 remove spec functions with max(abs()) < 0.03
-        """
-        
+        #MAE on spectral function only
+        # combList = zip(rhovaluesList[i][:nbrWs],predicData[i][:nbrWs])
+        # scale = max(abs(rhovaluesList[i][:nbrWs]))
+        # for orig, recon in combList:
+        #     MAE += abs(orig-recon)/scale
             
-        #MAE on all values
-        # combListAll = zip(rhovaluesList[i],predicData[i])
-        # scale = abs(max(rhovaluesList[i]))
-        # for orig, recon in combListAll:
-        #     MAE += (orig-recon)**2/(scale)
-        
+        #MAE on poles only
+        # combList = zip(rhovaluesList[i][nbrWs:],predicData[i][nbrWs:])
+        # for orig, recon in combList:
+        #     MAE += abs(orig-recon)
             
-        # More weight to poles
-        combList = zip(rhovaluesList[i][nbrWs:],predicData[i][nbrWs:])
-        for orig, recon in combList:
-            MAE += abs(orig-recon)**2
-            
-        #MAE on propagator
+        #MAE on propagator only
         # reconProp = reconstructProp(i)
         # combListProp = zip(propList[i],reconProp)
         # scale = abs(max(propList[i]))
         # for orig, recon in combListProp:
         #     MAE += abs(orig-recon)/scale
             
-        if MAE > 1000:
-            nbrlargemaes += 1
-            # print(MAE)
-            # print(i)
-        # For 100k (8x1000):
-            # and i != 17348 and i != 16195 and i != 7286 and i != 17312
-            # and i != 3012
-            #,4241,4686,24,3008
-        blacklist = []
-        # blacklist = [5364]
-        # blacklist = [88,255,519,955,1023,1770,2186,2251,3097]
-        if MAE > maxMAE and i not in blacklist: 
+        
+        if MAE > maxMAE: 
             maxMAE = MAE
             maxMAEindex = i
-        if MAE < minMAE and i not in blacklist:
+        if MAE < minMAE:
             minMAE = MAE
             minMAEindex = i
         
         fullSortedList.append((MAE,i))
+        
+        
+        if positivepropconstraint(i):
+            constraintsSatisfied1 += 1
+        if derivativeconstraint(i):
+            constraintsSatisfied2 += 1
+        if constraint15(i):
+            constraintsSatisfied3 += 1
+        if testConstraints(i):
+            constraintsSatisfiedAll += 1
+        
+
     
     fullSortedList.sort()
     
-    print("Sorted all rhos")
-    
-    print(nbrlargemaes,"number of large maes")
+    # print("Sorted all rhos")
     
     
-    """
-    Test an actual propagator:
-    """
-    # #Read test data and convert to proper list
-    # file = open("testPropData.txt","r")
-    # basestring = file.read().split("\n")
+    print(str(constraintsSatisfied1)+"/"+str(len(rhovaluesList)), "recons satisfied constraint 1")
+    print(str(constraintsSatisfied2)+"/"+str(len(rhovaluesList)), "recons satisfied constraint 2")
+    print(str(constraintsSatisfied3)+"/"+str(len(rhovaluesList)), "recons satisfied constraint 3")
+    print(str(constraintsSatisfiedAll)+"/"+str(len(rhovaluesList)), "recons satisfied all constraints")
     
-    # newlist = []
-    # for elem in basestring:
-    #     newelem = elem.translate(str.maketrans("","","`} ")).split("{")[1:]
-    #     newlist.append(newelem)
-    
-    # floatlist = []
-    # for elem in newlist:
-    #     floatlist.append(elem[0].split(","))
-    
-    # newlist = []
-    # for elem in floatlist:
-    #     partlist = []
-    #     for nbr in elem:
-    #         if nbr != "":
-    #             partlist.append(float(nbr))
-    #     newlist.append(partlist)
-        
-    
-    # psT = [item[0] for item in newlist]
-    # dp2s = [item[1] for item in newlist]
-    # errors = [item[2] for item in newlist]
-    
-    # #Sort the arrays as some p's are out of order:
-    # from more_itertools import sort_together
-    # lists = sort_together([psT,dp2s,errors])
-    # psT = list(lists[0])
-    # dp2s = list(lists[1])
-    # errors = list(lists[2])
-    
-    # psT.append(10)
-    # dp2s.append(0)
-    # errors.append(errors[-1])
-
-    # from scipy.interpolate import interp1d
-    
-    # psNew = np.linspace(pstart,pend,nbrPoints)
-    # dp2sFunc = interp1d(psT,dp2s)
-    # dp2sInter = dp2sFunc(psNew)   
-    
-    # print("Loaded monte carlo prop")
-    
-    #Get closest propagator to an actual monte carlo one:
-    # minMAEindexProp = 0
-    # minMAEProp = 100000
-    
-    # fullSortedListProp = []
-    # for i in range(len(propList)):
-    #     MAE = 0
-    #     #MAE on propagator
-    #     for j in range(len(ps)):
-    #         MAE += abs(propList[i][j] - dp2sInter[j])
-    #         if j < 5 and i == 2967:
-    #             print(MAE)
-            
-    #     if i == 2967:
-    #         print(propList[i])
-    #         print(dp2sInter)
-            
-    #     if MAE < minMAEProp:
-    #         minMAEProp = MAE
-    #         minMAEindexProp = i
-        
-    #     fullSortedListProp.append((MAE,i))
-    # fullSortedListProp.sort()
-    # print(fullSortedListProp[0])
-    # print(fullSortedListProp[-1])
-        
     
     print("Min. MAE:",minMAE)
     print("Max. MAE:",maxMAE)
 
-    # print("best:",minMAEindex)
     percentile25th = fullSortedList[round(len(fullSortedList)/4)][1]
-    # print("25prct",percentile25th)
     percentile50th = fullSortedList[round(2*len(fullSortedList)/4)][1]
-    # print("50prct",percentile50th)
     percentile75th = fullSortedList[round(3*len(fullSortedList)/4)][1]
-    # print("75prct",percentile75th)
-    # print("worst:",maxMAEindex)
-    print("best,25prct,50prct,75prct,worst:", \
+    print("index of the best,25prct,50prct,75prct,worst:", \
           [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex])
     
-        
-    
-    #Test actual propagator:
-    # maxMAEindex = -1
-    # percentile75th = 8654
     
     
     fig, ((ax11,ax12,ax13,ax14),(ax21,ax22,ax23,ax24),(ax31,ax32,ax33,ax34), \
@@ -363,7 +313,6 @@ if getBestAndWorst:
         propaxes[i].plot(ps,reconstructProp(indices[i]),"--",label="Reconstructed propagator",color="red")
         propaxes[i].set_xlabel("p")
         propaxes[i].set_ylabel("D(p²)")
-        # propaxes[i].set_xscale("log")
             
     rhoaxes = [ax12,ax22,ax32,ax42,ax52]
     for i in range(len(rhoaxes)):
@@ -400,26 +349,6 @@ if getBestAndWorst:
     fig.set_tight_layout(True)
     
     
-    
-    # index = percentile75th
-    
-    
-    # plt.figure()
-    # plt.plot(ps,propList[index],label="Original propagator")
-    # plt.plot(ps,reconstructedProp,label="Reconstructed propagator,sigma=0")
-    # plt.plot(ps,reconstructProp(index),label="Reconstructed propagator")
-    # plt.legend()
-    
-    
-    
-    
-    
-
-    
-    
- 
-
-
 
 
 
