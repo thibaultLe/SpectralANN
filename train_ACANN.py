@@ -6,7 +6,9 @@ from torch.utils.data import DataLoader
 import torch
 import inputParameters as config
 import matplotlib.pyplot as plt
+import os
 
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 #Load input parameters from inputParameters.py
 inputSize = config.nbrPoints
@@ -23,37 +25,26 @@ print("Starting ACANN")
 # Create the network
 
 MAEsplot = []
-# layers = [2,4,6,8]
+# layers = [2,4,6,8,10]
 # neuronsPerLayer = [200,400,600,800]
 layers = [6]
-neuronsPerLayer = [800]
+neuronsPerLayer = [600]
 
 for layer in layers:
     for neuronNbr in neuronsPerLayer:
         print(layer,"layers",neuronNbr,"neurons per layer")
         model = ACANN(inputSize,outputSize,layer*[neuronNbr],drop_p=0.1).double()
         
-        epochs = 48
+        epochs = 100
         batch_size_train = 100
         
-        #100k: 0.26 on epoch 119 of 200 (6x800)
-        #0.198 epoch 179, 0.190 e190 nothing better at 275 (8x1000)
-        #0.27 epoch 96 (10x1500) 0.24 epoch 260
-        
-        
-        # print("Model created")
         # Import the data
         path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
         train_data = Database(csv_target= path + "rhoTraining.csv",csv_input= path + "DTraining.csv",nb_data=epochs*batch_size_train).get_loader()
         validation_data=Database(csv_target= path + "rhoValidation.csv",csv_input= path + "DValidation.csv",nb_data=sizeOfValidation).get_loader()
         
         trainloader = DataLoader(train_data,batch_size=batch_size_train,shuffle=True)
-        validationloader = DataLoader(validation_data,batch_size=100,shuffle=True)
-        # print("Training:",list(trainloader))
-        # print("Validation:",list(validationloader))
-        # print("Data Loaded")
-        
-        
+        validationloader = DataLoader(validation_data,batch_size=batch_size_train,shuffle=True) 
         
         # Define a function for computing the validation score
         def validation_score(nn_model):
@@ -80,9 +71,6 @@ for layer in layers:
         # Training parameters
         step=-1
         print_every = epochs
-        # print("##############################")
-        # print("##############################")
-        # print("Starting the training")
         
         # Training
         best_valscore = 10000
@@ -94,15 +82,12 @@ for layer in layers:
                 model.train()
                 #  Load a minibatch
                 for D,rho in trainloader:
-                    # print("D:",D)
-                    # print("A:",A)
                     step+=1
                     # restart the optimizer
                     optimizer.zero_grad()
                     # compute the loss
                     prediction = model.forward(D)
                     # print(prediction)
-                    # loss = error(eval_output(prediction),rho)
                     loss = error(prediction,rho)
                     # Compute the gradient and optimize
                     loss.backward()
@@ -114,19 +99,14 @@ for layer in layers:
                         print("Epoch {}/{} : ".format(e+1,epochs),
                               "Training MAE = {} -".format(loss.item()),
                               "Validation MAE = {}".format(validation_score(model)))
-                        
-                        #Early stopping: only save the best validation MAE
-                        if validation_score(model) < best_valscore:
-                            best_valscore = validation_score(model)
-                            torch.save(model.state_dict(),'savedNNmodel.pth')
-                        # if validation_score(model) > 10:
-                        #     stop = True
-                            
+                                                    
                 
                 MAEs.append(validation_score(model))
             
-            
-        print("Saved model with validation MAE of", best_valscore)
+        
+        
+        print("Saved model with validation MAE of", validation_score(model))
+        torch.save(model.state_dict(),'savedNNmodel.pth')
             
         plt.figure()
         plt.plot(list(range(1,len(MAEs)+1)),MAEs)
@@ -134,6 +114,6 @@ for layer in layers:
         plt.xlabel("Epochs")
         plt.ylabel("MSE")
         
-        MAEsplot.append(min(MAEs))
+        MAEsplot.append(MAEs[-1])
         
 print(MAEsplot)
