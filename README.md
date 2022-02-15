@@ -10,7 +10,7 @@ Our generated datasets of training, validation and testing can be found under Da
    The datasets of training, validation and testing can be found under Datasets
 3) Run propagatorNoise.py
 
-   This converts the propagator data to the correct input format
+   This converts the propagator data to the correct input format (adds artificial noise to improve robustness)
 5) Run train_ACANN.py
 
    The trained neural network is saved in 'savedNNmodel.pth'
