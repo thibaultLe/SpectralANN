@@ -4,7 +4,7 @@ The trained PyTorch neural network can be found under 'savedNNmodel.pth', which 
 Our generated datasets of training, validation and testing can be found under Datasets
 
 
-# Workflow to generate new data and train the network:
+# Workflow to generate new data and train a neural network:
 1) Run generatePropagators.py
 
    The datasets of training, validation and testing can be found under Datasets
