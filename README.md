@@ -3,6 +3,9 @@ The trained PyTorch neural network can be found under 'savedNNmodel.pth', which 
 
 Our generated datasets of training, validation and testing can be found under Datasets
 
+# Testing the trained network:
+1) Run test_ACANN.py for the artificial test data
+2) Run MonteCarloTest.py for the genuine lattice data
 
 # Workflow to generate new data and train a neural network:
 1) Run generatePropagators.py
