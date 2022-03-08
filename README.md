@@ -5,6 +5,7 @@ Our generated datasets of training, validation and testing can be found under Da
 
 # Testing the trained network:
 1) Run test_ACANN.py for the available test data
+2) Run MonteCarloTest.py for genuine lattice data (this data is too large for GitHub, but we can send it upon request)
 
 # Workflow to generate new data and train a neural network:
 1) Run generatePropagators.py
