@@ -23,8 +23,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/MonteCarloDataset/"
 
 
-# filename = "gluon_bare_64x4_1801Conf_20000bootsamples.dat"
-filename = "gluon_bare_80x4_1801Conf_18010bootsamples.dat"
+filename = "gluon_bare_64x4_1801Conf_20000bootsamples.dat"
+# filename = "gluon_bare_80x4_1801Conf_18010bootsamples.dat"
 
 x = np.loadtxt(path+filename)
 
@@ -76,7 +76,7 @@ propLists = propLists[1:]
 
 print("Loaded propagators")
         
-maxAmount = 50
+# maxAmount = 50
 
 actualPropagators = []
 NNinputs = []
@@ -92,8 +92,8 @@ for i in range(len(propLists)):
     
     NNinputs.append(dp2s)
     
-    if i > maxAmount:
-        break
+    # if i > maxAmount:
+    #     break
 
 
 NNinputs = pd.DataFrame(NNinputs)
@@ -133,6 +133,8 @@ def plotPolesForIndex(i,ax):
     ax.grid()
     ax.set_xlabel("Re(q)")
     ax.set_ylabel("Im(q)")
+    ax.set_xlim([0.15,0.4])
+    ax.set_ylim([0.2,0.8])
     
 
 def plotResiduesForIndex(i,ax):
@@ -147,6 +149,8 @@ def plotResiduesForIndex(i,ax):
     ax.grid()
     ax.set_xlabel("Re(R)")
     ax.set_ylabel("Im(R)")
+    ax.set_xlim([-1.5,1.5])
+    ax.set_ylim([-0.2,1.2])
     
 #Reconstruct propagator from reconstructed spectral function and poles:
 def poles(p,N,poleList):
@@ -220,6 +224,7 @@ def derivativeconstraint(index):
         derivativePoles += (-2*a*c**2 + 2*a*d**2 + 4*b*c*d)/((c**2 + d**2)**2)
         
     idealDerivative = -np.pi*derivativeRho - derivativePoles
+    # idealDerivative = -derivativePoles
     
     if derivativeProp < idealDerivative - 1 or \
         derivativeProp > idealDerivative + 1:
@@ -287,10 +292,10 @@ if getBestAndWorst:
             
     
     
-    print(str(constraintsSatisfied1)+"/"+str(len(propLists)), "recons satisfied constraint 1")
-    print(str(constraintsSatisfied2)+"/"+str(len(propLists)), "recons satisfied constraint 2")
-    print(str(constraintsSatisfied3)+"/"+str(len(propLists)), "recons satisfied constraint 3")
-    print(str(constraintsSatisfiedAll)+"/"+str(len(propLists)), "recons satisfied all constraints")
+    print(str(constraintsSatisfied1)+"/"+str(len(NNinputs)), "recons satisfied constraint 1")
+    print(str(constraintsSatisfied2)+"/"+str(len(NNinputs)), "recons satisfied constraint 2")
+    print(str(constraintsSatisfied3)+"/"+str(len(NNinputs)), "recons satisfied constraint 3")
+    print(str(constraintsSatisfiedAll)+"/"+str(len(NNinputs)), "recons satisfied all constraints")
     
     fullSortedList.sort()
     
@@ -327,7 +332,13 @@ if getBestAndWorst:
             
     rhoaxes = [ax12,ax32,ax52]
     for i in range(len(rhoaxes)):
+        #rhoaxes[i].plot(ws,predicData[indices[i]][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+        sigma = predicData[indices[i]][-1]
+        rhoaxes[i].axvline(x=sigma,ymin=-10,ymax=10,color='orangered',linestyle='dotted',label='σ')
+    
         rhoaxes[i].plot(ws,predicData[indices[i]][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+        sigma = predicData[indices[i]][-1]
+    
         rhoaxes[i].set_xlabel("ω²")
         rhoaxes[i].set_ylabel("ρ(ω)")
     
@@ -335,8 +346,16 @@ if getBestAndWorst:
     handles, labels = ax11.get_legend_handles_labels()
     ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
     
-    handles, labels = ax12.get_legend_handles_labels()
-    ax12.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
+    # handles, labels = ax12.get_legend_handles_labels()
+    # ax12.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
+    
+    handles,labels = ax12.get_legend_handles_labels()
+    reconTuple = (handles[1],handles[0])
+    labels = ["Reconstructed spectral function, σ"]
+    ax12.legend((reconTuple,),labels,
+                numpoints=1, handler_map={tuple: HandlerTuple(ndivide=2,pad=1.3)},
+                loc="upper center",bbox_to_anchor=(0.5,1.5),handlelength=4)
+    
     
     handles,labels = ax13.get_legend_handles_labels()
     reconTuple = (handles[0],handles[1],handles[2])
@@ -352,6 +371,5 @@ if getBestAndWorst:
                 numpoints=1, handler_map={tuple: HandlerTuple(ndivide=3,pad=1.3)},
                 loc="upper center",bbox_to_anchor=(0.5,1.5),handlelength=4)
     
-    fig.set_tight_layout(True)
     
         

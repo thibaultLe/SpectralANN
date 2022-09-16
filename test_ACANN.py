@@ -39,6 +39,11 @@ model = ACANN(inputSize,outputSize,6*[600],drop_p=0.1).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
+model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+params = sum([np.prod(p.size()) for p in model_parameters])
+
+print("Number of parameters:",params)
+
 
 
 #Load test data
@@ -50,11 +55,11 @@ testloader = DataLoader(test_data,batch_size=sizeOfValidation)
 testloadList = list(testloader)
 #Convert tensor to numpy array:
 rhovaluesList = testloadList[0][1].to("cpu").numpy()
-print(len(rhovaluesList),"testing points")
+print(len(rhovaluesList),"testing functions")
 
 prop_data = pd.read_csv(path+'DTest.csv',header=None,nrows=sizeOfValidation)
 propList = prop_data.values.tolist()
-print(len(propList),"propagators")
+# print(len(propList),"propagators")
 
 params_data = pd.read_csv(path+'params.csv',header=None,nrows=sizeOfTraining+2*sizeOfValidation)
 paramsList = params_data.values.tolist()
@@ -115,8 +120,8 @@ def plotResiduesForIndex(i,ax):
         ax.plot(aj,bj,marker=resmarkers[j],color="lawngreen",label="Reconstructed residues",markersize=msizes[j])
         
     
-    ax.set_xlim([-2,2])
-    ax.set_ylim([-0.2,1])
+    ax.set_xlim([-1.5,1.5])
+    ax.set_ylim([-0.2,1.2])
     ax.grid()
     ax.set_xlabel("Re(R)")
     ax.set_ylabel("Im(R)")
@@ -219,6 +224,10 @@ if getBestAndWorst:
     constraintsSatisfied3 = 0
     constraintsSatisfiedAll = 0
     
+    
+    wssteps = ws[1] - ws[0]
+    
+    
     fullSortedList = []    
     for i in range(len(rhovaluesList)):
         MAE = 0
@@ -288,6 +297,17 @@ if getBestAndWorst:
     print("index of the best,25prct,50prct,75prct,worst:", \
           [minMAEindex,percentile25th,percentile50th,percentile75th,maxMAEindex])
     
+    listOfpoles = []
+    for i in range(len(fullSortedList)):
+        nbrOfPoles = 0
+        for j in range(3):
+            ajOrig = rhovaluesList[i][nbrWs + 4*j]
+            bjOrig = rhovaluesList[i][nbrWs + 4*j + 1]
+            if ajOrig != 0 or bjOrig != 0:
+                nbrOfPoles += 1
+        if nbrOfPoles == 1:
+            listOfpoles.append(i)
+    print('1 pole:',listOfpoles)
     
     
     fig, ((ax11,ax12,ax13,ax14),(ax21,ax22,ax23,ax24),(ax31,ax32,ax33,ax34), \
@@ -318,17 +338,29 @@ if getBestAndWorst:
     for i in range(len(rhoaxes)):
         if indices[i] != -1:
             rhoaxes[i].plot(ws,rhovaluesList[indices[i]][:nbrWs],label="Spectral function")
-        rhoaxes[i].plot(ws,predicData[indices[i]][:nbrWs],"--",label="Reconstructed spectral function",color="red")
+            
+            sigma = rhovaluesList[indices[i]][-1]
+            rhoaxes[i].axvline(x=sigma,ymin=-10,ymax=10,color='dodgerblue',label='σ',linestyle='dotted')
+        
+        rhoaxes[i].plot(ws,predicData[indices[i]][:nbrWs],"--",label="Reconstructed spectral function, σ",color="red")
+        
+        sigma = predicData[indices[i]][-1]
+        rhoaxes[i].axvline(x=sigma,ymin=-10,ymax=10,color='orangered',linestyle='dotted',label='Reconstructed σ')
         rhoaxes[i].set_xlabel("ω²")
         rhoaxes[i].set_ylabel("ρ(ω)")
     
     
     
     handles, labels = ax11.get_legend_handles_labels()
-    ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
+    ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))    
     
-    handles, labels = ax12.get_legend_handles_labels()
-    ax12.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.5))
+    handles,labels = ax12.get_legend_handles_labels()
+    origTuple = (handles[0],handles[1])
+    reconTuple = (handles[2],handles[3])
+    labels = ["Spectral function, σ", "Reconstructed spectral function, σ"]
+    ax12.legend((origTuple,reconTuple),labels,
+                numpoints=1, handler_map={tuple: HandlerTuple(ndivide=2,pad=1.3)},
+                loc="upper center",bbox_to_anchor=(0.5,1.5),handlelength=4)
     
     handles,labels = ax13.get_legend_handles_labels()
     origTuple = (handles[0],handles[2],handles[4])
@@ -346,9 +378,6 @@ if getBestAndWorst:
                 numpoints=1, handler_map={tuple: HandlerTuple(ndivide=3,pad=1.3)},
                 loc="upper center",bbox_to_anchor=(0.5,1.5),handlelength=4)
     
-    fig.set_tight_layout(True)
+    # fig.set_tight_layout(True)
     
-    
-
-
 

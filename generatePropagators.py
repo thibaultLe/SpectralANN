@@ -119,8 +119,12 @@ def constraint15(Z,m2,lam2,N1,ABCs,N2,gabl,N3,gabi,abcds):
 
 #Returns true if the constraint is satisfied
 @lru_cache(maxsize=cacheSize)
-def derivativeConstraint(dp0,dp1,rho0,rho1,abcds,N):    
+def derivativeConstraint(dp0,dp1,rho0,rho1,abcds,N,sig):    
+    # if sig == 0:
     derivativeRho = (rho1 - rho0)/(ws[1]-ws[0])
+    # else:
+    #     derivativeRho = 0
+        
     derivativeProp = (dp1 - dp0)/(ps[1]**2-ps[0]**2)
     
     derivativePoles = 0
@@ -148,7 +152,7 @@ if __name__ == "__main__":
     path = "C:/Users/Thibault/Documents/Universiteit/Honours/Deel 2, interdisciplinair/Code/NN/Datasets/"
     
     #Desired training data size:
-    desiredDataSize = 30000
+    desiredDataSize = 10000
     
     pstart = 0
     pend = 8.25
@@ -228,14 +232,15 @@ if __name__ == "__main__":
         gabiNs.append(sampled_gabis)
         
     #Complex poles:
-    T = list(itertools.product(*[[-1,-0.33,0.33,1],[0,0.33,0.66,1], \
-                     [0.2,0.25,0.3,0.35],[0.3,0.45,0.6,0.75]]))
+    T = list(itertools.product(*[[-1,-0.33,0,0.33,1],[0,0.33,0.66,1], \
+                      [0.2,0.25,0.3,0.35],[0.3,0.45,0.6,0.75]]))
     abcdNs = []
     for N in Ns:
         abcds = list(itertools.combinations_with_replacement(T,N))
         sampled_abcds = []
         for abcd in abcds:
-            if random.random() < 0.000015:
+            # if random.random() < 0.000015:
+            if random.random() < 0.000007:
                 sampled_abcds.append(abcd)
         
         abcdNs.append(sampled_abcds)
@@ -379,7 +384,7 @@ if __name__ == "__main__":
                     dp0 = dps[0] 
                     dp1 = dps[1]
                     
-                    if not derivativeConstraint(dp0,dp1,rhos0,rhos1,abcds,N):
+                    if not derivativeConstraint(dp0,dp1,rhos0,rhos1,abcds,N,sigma):
                         negativeProp = True
                         break
                 

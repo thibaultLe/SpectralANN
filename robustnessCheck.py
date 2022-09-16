@@ -11,15 +11,8 @@ Created on Thu Sep  2 17:54:33 2021
 #3: Input to NN
 #4: Calc average and stddev of spectral functions
 
-#1e-3 noise,100k:
-    #were erased??
-# indices = [2608, 4750, 14605, 6786, 4920]
-# indices =  [41, 1453, 1552, 1322, 1232]
 
-
-# indices = [4241, 1499, 4321, 3744, 1755]
-# indices = [2944, 341, 2332, 2048, 1558]
-indices =[366, 61, 189, 269, 730]
+indices = [227, 1552, 112, 1243, 606]
 
 nbrOfSamples = 100
 noiseSize = 1e-2
@@ -101,13 +94,10 @@ print("NN input size {}, output size {} plus {} poles".format(inputSize,outputSi
 # #Note: Make sure the dimensions are the same
 # model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
 
-# saved = "savedNNmodel8x1000,0.190,100k.pth"
 saved = "savedNNmodel.pth"
 
 #Note: Make sure the dimensions are the same
-model = ACANN(inputSize,outputSize,6*[800],drop_p=0.05).double()
-# model = ACANN(inputSize,outputSize,8*[1000],drop_p=0.05).double()
-# model = ACANN(inputSize,outputSize,4*[400],drop_p=0.05).double()
+model = ACANN(inputSize,outputSize,6*[600],drop_p=0.1).double()
 model.load_state_dict(torch.load(saved))
 model.eval()
 
@@ -166,14 +156,14 @@ def getMeanAndStdReconstruction(index):
         poles.append(filteredPredicData[j][nbrWs:])
     
     means = np.mean(filteredPredicData,axis=0)[:nbrWs]
-    stddevs = np.std(filteredPredicData,axis=0)[:nbrWs]
+    stddevs = 5*np.std(filteredPredicData,axis=0)[:nbrWs]
     
     props = []
     for j in range(len(filteredPredicData)):
         props.append(reconstructProp(filteredPredicData[j]))
     
     propmeans = np.mean(props,axis=0)
-    propstddevs = np.std(props,axis=0)
+    propstddevs = 5*np.std(props,axis=0)
     
     return means, stddevs, poles, propmeans, propstddevs
 
@@ -195,7 +185,7 @@ def reconstructProp(reconstruction):
     sigma = reconstruction[-1]
     #If negative, -> 0
     #If more than 1 -> 1
-    wscutoff = min(max(int(round(sigma/0.04995)),0),1)
+    wscutoff = min(range(len(ws)), key=lambda i: abs(ws[i]-sigma))
     
     reconstructedPropSigma = []
     for p in ps:
@@ -207,8 +197,7 @@ def reconstructProp(reconstruction):
         prop = integral + poles(p**2,3, reconstruction[nbrWs:nbrWs+12])
         reconstructedPropSigma.append(prop)
     
-    # rescaling = reconstructedPropSigma[51]*16
-    rescaling = reconstructedPropSigma[11]
+    rescaling = reconstructedPropSigma[12]
     for i in range(len(ps)):
         reconstructedPropSigma[i] = reconstructedPropSigma[i]/rescaling
     return reconstructedPropSigma
@@ -229,7 +218,7 @@ for i in range(len(indices)):
     propaxes[i].plot(ps,propList[indices[i]],label="Propagator")
     propaxes[i].plot(ps,propmeans,"--",label="Mean reconstruction",color="red")
     propaxes[i].fill_between(ps,propmeans-propstddevs,propmeans+propstddevs,alpha=0.2, facecolor="red",
-                    label='Standard deviation')
+                    label='5*(Standard deviation)')
     propaxes[i].set_xlabel("p")
     propaxes[i].set_ylabel("D(p²)")
     # propaxes[i].set_xscale('log')
@@ -238,10 +227,20 @@ for i in range(len(indices)):
     spectralaxes[i].set_xlabel("ω²")
     spectralaxes[i].set_ylabel("ρ(ω)")
     
-    spectralaxes[i].plot(ws,rhovaluesList[indices[i]][:nbrWs],label="Original function")
+    meansig = np.mean(polesAndSigma,axis=0)[-1]
+    stdsig = np.std(polesAndSigma,axis=0)[-1]
+    spectralaxes[i].axvline(x=meansig,ymin=-10,ymax=10,color='orangered',linestyle='dotted')
+    
+    spectralaxes[i].axvspan(meansig-5*stdsig,meansig+5*stdsig,alpha=0.2, facecolor="red")
+    
+    
+    sigma = rhovaluesList[indices[i]][-1]
+    spectralaxes[i].axvline(x=sigma,ymin=-10,ymax=10,color='dodgerblue',label='σ',linestyle='dotted')
+        
+    spectralaxes[i].plot(ws,rhovaluesList[indices[i]][:nbrWs],label="Spectral function, σ")
     spectralaxes[i].plot(ws,means,"--",label="Mean reconstruction",color="red")
     spectralaxes[i].fill_between(ws,means-stddevs,means+stddevs,alpha=0.2, facecolor="red",
-                    label='Standard deviation')
+                    label='5*(Standard deviation)')
     
     #Plot poles:
     aksA,bksA,cksA,dksA = [], [], [], []
@@ -304,20 +303,17 @@ for i in range(len(indices)):
         # polesaxes[i].fill(points[hull.vertices,0],points[hull.vertices,1],'red',alpha=0.4)
         
     resaxes[i].set_xlim([-1.5,1.5])
-    resaxes[i].set_ylim([0,1.2])
+    resaxes[i].set_ylim([-0.2,1.2])
     resaxes[i].grid()
     resaxes[i].set_xlabel("Re(R)")
     resaxes[i].set_ylabel("Im(R)")
     
-    polesaxes[i].set_xlim([0.1,0.4])
-    polesaxes[i].set_ylim([0.2,0.7])
+    polesaxes[i].set_xlim([0.15,0.4])
+    polesaxes[i].set_ylim([0.2,0.8])
     polesaxes[i].grid()
     polesaxes[i].set_xlabel("Re(q)")
     polesaxes[i].set_ylabel("Im(q)")
     
-    """
-    TODO: Mean, stddev of poles:
-    """
     print("Mean, stddev of sigma:", np.mean(polesAndSigma,axis=0)[-1],np.std(polesAndSigma,axis=0)[-1])
     
         
@@ -327,7 +323,16 @@ ax11.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.7))
 
 handles, labels = ax12.get_legend_handles_labels()
 ax12.legend(handles,labels,loc="upper center",bbox_to_anchor=(0.5,1.7))
-fig.set_tight_layout(True)
+
+
+handles,labels = ax12.get_legend_handles_labels()
+origTuple = (handles[1],handles[0])
+reconTuple = (handles[2])
+std = (handles[3])
+labels = ["Spectral function, σ","Mean reconstruction", "5*(Standard deviation)"]
+ax12.legend((origTuple,reconTuple,std),labels,
+            numpoints=1, handler_map={tuple: HandlerTuple(ndivide=2,pad=1.3)},
+            loc="upper center",bbox_to_anchor=(0.5,1.7),handlelength=4)
 
 handles,labels = ax13.get_legend_handles_labels()
 # print(handles)
