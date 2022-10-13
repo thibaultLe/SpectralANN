@@ -24,12 +24,14 @@ Note: Make sure the "path" variable in each file points to your current working 
 
 If you use this dataset or code, please cite us (https://arxiv.org/abs/2203.03293):
 
-    @article{LechienDudal:2022,
-	author = "Lechien, Thibault and Dudal, David",
-	title = "Neural network approach to reconstructing spectral functions and complex poles of confined particles",
-	eprint = "2203.03293",
-	archivePrefix = "arXiv",
-	primaryClass = "hep-lat",
-	month = "03",
-	year = "2022"
-    }
+    @Article{10.21468/SciPostPhys.13.4.097,
+	title={{Neural network approach to reconstructing spectral functions and complex  poles of confined particles}},
+	author={Thibault Lechien and David Dudal},
+	journal={SciPost Phys.},
+	volume={13},
+	pages={097},
+	year={2022},
+	publisher={SciPost},
+	doi={10.21468/SciPostPhys.13.4.097},
+	url={https://scipost.org/10.21468/SciPostPhys.13.4.097},
+}
