@@ -22,7 +22,7 @@ Note: Make sure the "path" variable in each file points to your current working 
 
    The resulting neural network can be tested
 
-If you use this dataset or code, please cite us (https://arxiv.org/abs/2203.03293):
+If you use this dataset or code, please cite us (https://scipost.org/SciPostPhys.13.4.097):
 
     @Article{10.21468/SciPostPhys.13.4.097,
 	title={{Neural network approach to reconstructing spectral functions and complex  poles of confined particles}},
